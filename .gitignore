@@ -1,0 +1,8 @@
+node_modules
+build
+.cache
+.env
+*.local
+.DS_Store
+cloudflared.exe
+.claude

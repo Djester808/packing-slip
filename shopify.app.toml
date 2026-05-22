@@ -1,0 +1,22 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = ""
+application_url = "https://pack-slip.fly.dev"
+embedded = true
+name = "PackSlip Weather"
+
+[access_scopes]
+scopes = "read_orders,read_customers"
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = [ "app/uninstalled" ]
+
+[auth]
+redirect_urls = [ "https://pack-slip.fly.dev/auth/callback" ]
+
+[build]
+automatically_update_urls_on_dev = true
