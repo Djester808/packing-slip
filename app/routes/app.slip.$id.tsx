@@ -1,46 +1,83 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useNavigate } from "@remix-run/react";
+import { useState } from "react";
 import { shopifyGraphQL } from "../admin-api.server";
-import { getMaxTempF, addBusinessDays, toDateString } from "../weather.server";
+import { getTempRange, addBusinessDays, toDateString, nextShipDate } from "../weather.server";
 import { getTransitDays } from "../transit.server";
 import { getAlert } from "../alert";
+import { getPackBadge } from "../pack-badge";
 import prisma from "../db.server";
 
-export const loader = async ({ params }: LoaderFunctionArgs) => {
+function isLocalShipping(method: string) {
+  return /local|pickup|pick.?up/i.test(method) ||
+    /^\d+\s+\S.*\b(rd|st|ave|blvd|dr|ln|way|ct|pl|hwy|pkwy|drive|street|avenue|road|lane|court)\b/i.test(method);
+}
+
+export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const orderId = params.id!;
+  const url = new URL(request.url);
+  const navIds = url.searchParams.get("ids")?.split(",").filter(Boolean) ?? [];
+  const navIndex = parseInt(url.searchParams.get("i") ?? "-1", 10);
   const gid = `gid://shopify/Order/${orderId}`;
 
-  const data = await shopifyGraphQL(
-    `query getOrder($id: ID!) {
-      order(id: $id) {
-        id name createdAt note displayFulfillmentStatus
-        customer { firstName lastName email }
-        shippingAddress {
-          firstName lastName
-          address1 address2
-          city province zip country
+  const [data, shopNameData, shopBrandData] = await Promise.all([
+    shopifyGraphQL(
+      `query getOrder($id: ID!) {
+        order(id: $id) {
+          id name createdAt note tags displayFulfillmentStatus
+          customer { firstName lastName email }
+          shippingAddress {
+            firstName lastName
+            address1 address2
+            city province zip country
+          }
+          shippingLine { title }
+          lineItems(first: 50) {
+            edges { node { title quantity variant { title sku image { url } product { featuredImage { url } } } } }
+          }
+          totalPriceSet { presentmentMoney { amount currencyCode } }
+          subtotalPriceSet { presentmentMoney { amount currencyCode } }
+          totalShippingPriceSet { presentmentMoney { amount currencyCode } }
+          totalTaxSet { presentmentMoney { amount currencyCode } }
         }
-        shippingLine { title }
-        lineItems(first: 50) {
-          edges { node { title quantity variant { title sku } } }
-        }
-        totalPriceSet { presentmentMoney { amount currencyCode } }
-        subtotalPriceSet { presentmentMoney { amount currencyCode } }
-        totalShippingPriceSet { presentmentMoney { amount currencyCode } }
-        totalTaxSet { presentmentMoney { amount currencyCode } }
-      }
-    }`,
-    { id: gid },
-  );
+      }`,
+      { id: gid },
+    ),
+    shopifyGraphQL(`query { shop { name } }`, {}).catch(() => null),
+    shopifyGraphQL(`query { shop { brand { logo { image { url } } squareLogo { image { url } } } } }`, {}).catch(() => null),
+  ]);
 
   const o = data.data?.order;
   if (!o) throw new Response("Order not found", { status: 404 });
 
+  const customerEmail = o.customer?.email ?? null;
+  let otherOrders: Array<{ id: string; name: string }> = [];
+  if (customerEmail) {
+    const otherData = await shopifyGraphQL(
+      `query getOtherOrders($q: String!) {
+        orders(first: 20, query: $q) {
+          edges { node { id name } }
+        }
+      }`,
+      { q: `email:"${customerEmail}" fulfillment_status:unfulfilled` },
+    ).catch(() => null);
+    otherOrders = (otherData?.data?.orders?.edges ?? [])
+      .map((e: any) => ({ id: e.node.id.split("/").pop(), name: e.node.name }))
+      .filter((r: any) => r.id !== orderId);
+  }
+
+  const shopName: string | null = shopNameData?.data?.shop?.name ?? null;
+  const shopLogoUrl: string | null = shopBrandData?.data?.shop?.brand?.logo?.image?.url
+    ?? shopBrandData?.data?.shop?.brand?.squareLogo?.image?.url
+    ?? null;
+
   const zip = o.shippingAddress?.zip ?? "";
   const shippingMethod = o.shippingLine?.title ?? "";
-  const transitDays = await getTransitDays(shippingMethod);
-  const deliveryDate = addBusinessDays(new Date(), transitDays);
+  const isLocal = isLocalShipping(shippingMethod);
+  const shipDate = nextShipDate();
+  const transitDays = await getTransitDays(shippingMethod, isLocal ? undefined : zip, shipDate, isLocal ? undefined : (o.shippingAddress?.province ?? undefined), isLocal ? undefined : (o.shippingAddress?.city ?? undefined));
+  const deliveryDate = addBusinessDays(shipDate, transitDays);
   const deliveryDateStr = toDateString(deliveryDate);
 
   const settings = await prisma.appSettings.upsert({
@@ -50,23 +87,32 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
   });
 
   let maxTempF: number | null = null;
+  let minTempF: number | null = null;
   let forecastOutOfRange = false;
 
-  const daysUntilDelivery = transitDays;
-  if (daysUntilDelivery > 5) {
-    forecastOutOfRange = true;
-  } else {
-    maxTempF = await getMaxTempF(zip, deliveryDateStr);
+  if (!isLocal && zip) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const calendarDays = Math.ceil(
+      (deliveryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
+    if (calendarDays > 14) {
+      forecastOutOfRange = true;
+    } else {
+      ({ maxTempF, minTempF } = await getTempRange(zip, deliveryDateStr));
+    }
   }
 
-  const alert = getAlert(maxTempF, settings.dontShipAbove, settings.icePackAbove);
+  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.dontShipAbove, settings.icePackAbove, settings.dontShipBelow, settings.cautionBelow);
 
-  const lineItems = (o.lineItems?.edges ?? []).map((e: any) => ({
-    title: e.node.title,
-    variant: e.node.variant?.title && e.node.variant.title !== "Default Title" ? e.node.variant.title : null,
-    sku: e.node.variant?.sku ?? null,
-    quantity: e.node.quantity,
-  }));
+  const lineItems = (o.lineItems?.edges ?? [])
+    .filter((e: any) => !/^tip$/i.test(e.node.title?.trim()))
+    .map((e: any) => ({
+      title: e.node.title,
+      variant: e.node.variant?.title && e.node.variant.title !== "Default Title" ? e.node.variant.title : null,
+      imageUrl: e.node.variant?.image?.url ?? e.node.variant?.product?.featuredImage?.url ?? null,
+      quantity: e.node.quantity,
+    }));
 
   const addr = o.shippingAddress;
   const shippingAddress = addr
@@ -85,6 +131,8 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     set?.presentmentMoney ? `${set.presentmentMoney.amount} ${set.presentmentMoney.currencyCode}` : null;
 
   return json({
+    shopLogoUrl,
+    shopName,
     order: {
       id: orderId,
       name: o.name,
@@ -93,173 +141,271 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
       }),
       note: o.note ?? null,
       fulfillmentStatus: o.displayFulfillmentStatus,
-      customerEmail: o.customer?.email ?? null,
+      customerEmail,
       shippingAddress,
+      customerName: o.customer ? `${o.customer.firstName ?? ""} ${o.customer.lastName ?? ""}`.trim() : null,
       shippingMethod,
+      isLocal,
+      isReship: /reship/i.test(shippingMethod),
       lineItems,
       subtotal: fmt(o.subtotalPriceSet),
       shipping: fmt(o.totalShippingPriceSet),
       tax: fmt(o.totalTaxSet),
       total: fmt(o.totalPriceSet),
     },
-    weather: {
+    otherOrders,
+    shipDate: shipDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
+    nav: navIds.length > 1 && navIndex >= 0 ? { ids: navIds, index: navIndex } : null,
+    weather: isLocal ? null : {
       maxTempF,
       deliveryDate: deliveryDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
-      deliveryDateStr,
       transitDays,
       forecastOutOfRange,
+      crossesWeekend: (() => {
+        const daysToFriday = 5 - shipDate.getDay();
+        const friday = new Date(shipDate);
+        friday.setDate(shipDate.getDate() + daysToFriday);
+        return deliveryDate > friday;
+      })(),
     },
     alert,
   });
 };
 
 const ALERT_ICON: Record<string, string> = {
-  danger: "⛔",
-  caution: "⚠️",
-  safe: "✅",
-  unknown: "❓",
+  danger: "⛔", caution: "⚠️", safe: "✅", unknown: "❓",
 };
 
 export default function PackingSlip() {
-  const { order, weather, alert } = useLoaderData<typeof loader>();
+  const { order, weather, alert, shopLogoUrl, shopName, nav, otherOrders, shipDate } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  const [checked, setChecked] = useState<Set<number>>(new Set());
+  const toggleCheck = (i: number) => setChecked((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
 
   return (
     <>
       <style>{`
+        @page { size: letter portrait; margin: 0; }
         @media print {
           .no-print { display: none !important; }
-          body { background: white !important; }
-          .slip { box-shadow: none !important; max-width: none !important; margin: 0 !important; padding: 24px !important; }
+          body { background: white !important; margin: 0 !important; }
+          .slip {
+            box-shadow: none !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 12mm !important;
+            border-radius: 0 !important;
+            font-size: 12px !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+            overflow: hidden !important;
+          }
+          .slip table { font-size: 11px !important; page-break-inside: avoid !important; }
+          .slip img { width: 48px !important; height: 48px !important; }
+          table tbody tr { page-break-inside: avoid !important; }
         }
         body { background: #f6f6f7; font-family: Inter, system-ui, sans-serif; margin: 0; }
       `}</style>
 
-      {/* Toolbar */}
       <div className="no-print" style={{ background: "#fff", borderBottom: "1px solid #e1e3e5", padding: "12px 24px", display: "flex", gap: "12px", alignItems: "center" }}>
-        <button onClick={() => navigate("/app")} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: "pointer", fontSize: "13px" }}>
-          ← Back
-        </button>
-        <button onClick={() => window.print()} style={{ background: "#1a1a1a", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 18px", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>
-          Print
-        </button>
-        <span style={{ fontSize: "13px", color: "#6d7175" }}>Estimated delivery: <strong>{weather.deliveryDate}</strong> ({weather.transitDays} business day{weather.transitDays !== 1 ? "s" : ""})</span>
+        <button onClick={() => navigate("/app")} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: "pointer", fontSize: "13px" }}>← Back</button>
+        {nav && (
+          <div style={{ marginLeft: "auto", display: "flex", gap: "8px", alignItems: "center" }}>
+            <span style={{ fontSize: "12px", color: "#6d7175" }}>{nav.index + 1} / {nav.ids.length}</span>
+            <button onClick={() => navigate(`/app/slip/${nav.ids[nav.index - 1]}?ids=${nav.ids.join(",")}&i=${nav.index - 1}`)} disabled={nav.index === 0} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: nav.index === 0 ? "default" : "pointer", fontSize: "13px", opacity: nav.index === 0 ? 0.4 : 1 }}>‹ Prev</button>
+            <button onClick={() => navigate(`/app/slip/${nav.ids[nav.index + 1]}?ids=${nav.ids.join(",")}&i=${nav.index + 1}`)} disabled={nav.index === nav.ids.length - 1} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: nav.index === nav.ids.length - 1 ? "default" : "pointer", fontSize: "13px", opacity: nav.index === nav.ids.length - 1 ? 0.4 : 1 }}>Next ›</button>
+          </div>
+        )}
+        <button onClick={() => window.print()} style={{ background: "#1a1a1a", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 18px", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Print</button>
+        {weather && (
+          <span style={{ fontSize: "13px", color: "#6d7175" }}>
+            Ships <strong>{shipDate}</strong> · Arrives <strong>{weather.deliveryDate}</strong>
+          </span>
+        )}
+        {order.isLocal && (
+          <span style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "4px", padding: "3px 10px", fontSize: "12px", fontWeight: 700, color: "#7d4e00" }}>
+            LOCAL ORDER — NO SHIPMENT
+          </span>
+        )}
       </div>
 
-      {/* Slip */}
       <div className="slip" style={{ maxWidth: "760px", margin: "32px auto", background: "#fff", borderRadius: "8px", boxShadow: "0 1px 4px rgba(0,0,0,0.1)", padding: "40px" }}>
 
-        {/* Weather Alert Banner */}
-        <div style={{ background: alert.bg, border: `2px solid ${alert.color}`, borderRadius: "8px", padding: "16px 20px", marginBottom: "32px" }}>
-          <div style={{ fontSize: "16px", fontWeight: 700, color: alert.color, marginBottom: "6px" }}>
-            {ALERT_ICON[alert.level]} {alert.headline}
+        {order.isReship && (
+          <div style={{ background: "#5c007a", borderRadius: "6px", padding: "8px 14px", marginBottom: "14px" }}>
+            <span style={{ fontSize: "12px", fontWeight: 800, color: "#fff", letterSpacing: "0.06em" }}>🔄 RESHIP — Verify original order before packing</span>
           </div>
-          <div style={{ fontSize: "13px", color: "#444", lineHeight: 1.5 }}>
-            {alert.body}
-            {weather.forecastOutOfRange && (
-              <span style={{ marginLeft: "8px", color: "#6d7175" }}>(Delivery is {weather.transitDays} days away — beyond the 5-day forecast window.)</span>
-            )}
+        )}
+
+        {weather?.crossesWeekend && (
+          <div style={{ background: "#ffd7d5", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>🚫 DO NOT SHIP — ARRIVES NEXT WEEK</div>
+            <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
+              Delivery est. <strong>{weather.deliveryDate}</strong> — holds over the weekend.
+            </div>
           </div>
-          <div style={{ marginTop: "8px", fontSize: "12px", color: "#6d7175" }}>
-            Estimated delivery: {weather.deliveryDate} · {weather.transitDays} business day{weather.transitDays !== 1 ? "s" : ""} via {order.shippingMethod || "—"}
+        )}
+
+        {otherOrders.length > 0 && (
+          <div style={{ background: "#fff0f0", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>
+              ⚠️ {otherOrders.length} other unfulfilled order{otherOrders.length !== 1 ? "s" : ""} from this customer
+            </div>
+            <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
+              {otherOrders.map((o) => o.name).join(", ")} — consider combining
+            </div>
           </div>
-        </div>
+        )}
+
+        {order.isLocal && (
+          <div style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#7d4e00" }}>📦 LOCAL ORDER — no weather check needed</div>
+          </div>
+        )}
+
+        {weather && alert && (
+          <div style={{ background: alert.bg, border: `1px solid ${alert.color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: alert.color }}>
+              {ALERT_ICON[alert.level]} {alert.headline}
+            </div>
+            <div style={{ fontSize: "12px", color: "#6d7175", marginTop: "2px" }}>
+              Ships: {shipDate} · Arrives: {weather.deliveryDate} · {weather.transitDays} day{weather.transitDays !== 1 ? "s" : ""}
+            </div>
+          </div>
+        )}
 
         {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "28px" }}>
-          <div>
-            <div style={{ fontSize: "22px", fontWeight: 700, marginBottom: "4px" }}>Packing Slip</div>
-            <div style={{ fontSize: "14px", color: "#6d7175" }}>{order.createdAt}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            {shopLogoUrl && (
+              <img src={shopLogoUrl} alt={shopName ?? ""} style={{ height: "52px", width: "auto", objectFit: "contain" }} />
+            )}
+            <div>
+              <div style={{ fontSize: "20px", fontWeight: 700, marginBottom: "2px" }}>{shopName ?? "Store"}</div>
+              <div style={{ fontSize: "14px", color: "#6d7175" }}>{order.createdAt}</div>
+            </div>
           </div>
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: "20px", fontWeight: 700 }}>{order.name}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end" }}>
+              <div style={{ fontSize: "20px", fontWeight: 700 }}>{order.name}</div>
+              {order.isReship && <span style={{ background: "#4a0080", border: "1px solid #7c00cc", borderRadius: "4px", padding: "2px 7px", fontSize: "11px", fontWeight: 800, color: "#fff", letterSpacing: "0.04em" }}>RESHIP</span>}
+              {order.isLocal && <span style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "4px", padding: "2px 7px", fontSize: "11px", fontWeight: 800, color: "#7d4e00" }}>LOCAL</span>}
+            </div>
             <div style={{ fontSize: "13px", color: "#6d7175", marginTop: "2px" }}>{order.fulfillmentStatus}</div>
           </div>
         </div>
 
         <hr style={{ border: "none", borderTop: "1px solid #e1e3e5", margin: "0 0 24px" }} />
 
-        {/* Ship To */}
-        <div style={{ marginBottom: "28px" }}>
-          <div style={{ fontSize: "11px", fontWeight: 700, color: "#6d7175", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>Ship to</div>
-          {order.shippingAddress ? (
-            <div style={{ fontSize: "14px", lineHeight: 1.7 }}>
-              <div style={{ fontWeight: 600 }}>{order.shippingAddress.name}</div>
-              <div>{order.shippingAddress.address1}</div>
-              {order.shippingAddress.address2 && <div>{order.shippingAddress.address2}</div>}
-              <div>{[order.shippingAddress.city, order.shippingAddress.province, order.shippingAddress.zip].filter(Boolean).join(", ")}</div>
-              <div>{order.shippingAddress.country}</div>
-              {order.customerEmail && <div style={{ color: "#6d7175", marginTop: "4px" }}>{order.customerEmail}</div>}
+        {/* Address + Shipping Method two-column */}
+        <div style={{ display: "flex", gap: "32px", marginBottom: "28px" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: "#6d7175", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>
+              {order.isLocal ? "Pickup / Contact" : "Ship to"}
             </div>
-          ) : (
-            <div style={{ color: "#6d7175", fontSize: "14px" }}>No shipping address</div>
-          )}
-          <div style={{ marginTop: "10px", fontSize: "13px", color: "#444" }}>
-            <span style={{ fontWeight: 600 }}>Shipping method:</span> {order.shippingMethod || "—"}
+            <div style={{ fontSize: "14px", lineHeight: 1.7 }}>
+              {(order.shippingAddress?.name || order.customerName) && (
+                <div style={{ fontWeight: 600 }}>{order.shippingAddress?.name || order.customerName}</div>
+              )}
+              {order.shippingAddress && !order.isLocal && (
+                <>
+                  <div>{order.shippingAddress.address1}</div>
+                  {order.shippingAddress.address2 && <div>{order.shippingAddress.address2}</div>}
+                  <div>{[order.shippingAddress.city, order.shippingAddress.province, order.shippingAddress.zip].filter(Boolean).join(", ")}</div>
+                  <div>{order.shippingAddress.country}</div>
+                </>
+              )}
+              {!order.shippingAddress && !order.customerName && (
+                <div style={{ color: "#6d7175" }}>No address on file</div>
+              )}
+            </div>
+          </div>
+          <div style={{ minWidth: "180px" }}>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: "#6d7175", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>Shipping Method</div>
+            <div style={{ fontSize: "14px", marginBottom: "12px" }}>
+              {order.isLocal
+                ? <span style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "4px", padding: "2px 8px", fontSize: "13px", fontWeight: 700, color: "#7d4e00" }}>{/^\d+\s/.test(order.shippingMethod) ? "Local Order" : order.shippingMethod}</span>
+                : <span style={{ color: "#444" }}>{order.shippingMethod || "—"}</span>
+              }
+            </div>
+            {order.customerEmail && (
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#6d7175", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>Email</div>
+                <div style={{ fontSize: "13px", color: "#6d7175" }}>{order.customerEmail}</div>
+              </div>
+            )}
           </div>
         </div>
 
         <hr style={{ border: "none", borderTop: "1px solid #e1e3e5", margin: "0 0 24px" }} />
 
-        {/* Items */}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px", marginBottom: "24px" }}>
           <thead>
             <tr style={{ background: "#f6f6f7" }}>
+              <th style={{ padding: "8px 12px", width: "36px", borderBottom: "1px solid #e1e3e5" }} />
+              <th style={{ padding: "8px 12px", width: "76px", borderBottom: "1px solid #e1e3e5" }} />
               <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#6d7175", borderBottom: "1px solid #e1e3e5" }}>Item</th>
-              <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#6d7175", borderBottom: "1px solid #e1e3e5" }}>SKU</th>
               <th style={{ padding: "8px 12px", textAlign: "right", fontWeight: 600, color: "#6d7175", borderBottom: "1px solid #e1e3e5" }}>Qty</th>
             </tr>
           </thead>
           <tbody>
             {order.lineItems.map((item, i) => (
-              <tr key={i} style={{ background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+              <tr key={i} style={{ background: checked.has(i) ? "#f0faf4" : i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                <td style={{ padding: "8px 12px", borderBottom: "1px solid #f0f0f0", verticalAlign: "middle", textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={checked.has(i)}
+                    onChange={() => toggleCheck(i)}
+                    style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "#007a5a" }}
+                  />
+                </td>
+                <td style={{ padding: "8px 12px", borderBottom: "1px solid #f0f0f0", verticalAlign: "middle" }}>
+                  {item.imageUrl
+                    ? <img src={item.imageUrl} alt={item.title} style={{ width: "64px", height: "64px", objectFit: "cover", borderRadius: "4px", border: "1px solid #e1e3e5", display: "block" }} />
+                    : <div style={{ width: "64px", height: "64px", background: "#f0f0f0", borderRadius: "4px", border: "1px solid #e1e3e5" }} />
+                  }
+                </td>
                 <td style={{ padding: "10px 12px", borderBottom: "1px solid #f0f0f0" }}>
-                  <div style={{ fontWeight: 500 }}>{item.title}</div>
+                  <div style={{ fontWeight: 500, textDecoration: checked.has(i) ? "line-through" : "none", color: checked.has(i) ? "#6d7175" : "#202223" }}>{item.title}</div>
                   {item.variant && <div style={{ color: "#6d7175", fontSize: "12px" }}>{item.variant}</div>}
                 </td>
-                <td style={{ padding: "10px 12px", borderBottom: "1px solid #f0f0f0", color: "#6d7175" }}>{item.sku || "—"}</td>
-                <td style={{ padding: "10px 12px", borderBottom: "1px solid #f0f0f0", textAlign: "right", fontWeight: 600 }}>{item.quantity}</td>
+                <td style={{ padding: "10px 12px", borderBottom: "1px solid #f0f0f0", textAlign: "right", fontWeight: 600, verticalAlign: "middle" }}>
+                  {item.quantity}
+                  {(() => {
+                    const badge = getPackBadge(item.variant, item.quantity, item.title);
+                    if (!badge) return null;
+                    return (
+                      <div style={{ marginTop: "4px", display: "flex", justifyContent: "flex-end" }}>
+                        <span style={{ background: badge.bg, color: "#fff", borderRadius: "4px", padding: "2px 7px", fontSize: "11px", fontWeight: 800, letterSpacing: "0.04em", whiteSpace: "nowrap" }}>
+                          {badge.text}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        {/* Totals */}
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "24px" }}>
-          <div style={{ minWidth: "220px", fontSize: "13px" }}>
-            {order.subtotal && (
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
-                <span style={{ color: "#6d7175" }}>Subtotal</span><span>{order.subtotal}</span>
-              </div>
-            )}
-            {order.shipping && (
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
-                <span style={{ color: "#6d7175" }}>Shipping</span><span>{order.shipping}</span>
-              </div>
-            )}
-            {order.tax && (
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
-                <span style={{ color: "#6d7175" }}>Tax</span><span>{order.tax}</span>
-              </div>
-            )}
-            {order.total && (
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0 4px", borderTop: "1px solid #e1e3e5", fontWeight: 700, fontSize: "14px" }}>
-                <span>Total</span><span>{order.total}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Notes */}
         {order.note && (
           <>
             <hr style={{ border: "none", borderTop: "1px solid #e1e3e5", margin: "0 0 20px" }} />
-            <div>
+            <div style={{ marginBottom: "28px" }}>
               <div style={{ fontSize: "11px", fontWeight: 700, color: "#6d7175", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "8px" }}>Order notes</div>
               <div style={{ fontSize: "13px", color: "#444", whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{order.note}</div>
             </div>
           </>
         )}
+
+        <hr style={{ border: "none", borderTop: "1px solid #e1e3e5", margin: "0 0 28px" }} />
+        <div style={{ display: "flex", gap: "48px", alignItems: "flex-end" }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: "#6d7175", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "32px" }}>Packed by</div>
+            <div style={{ borderBottom: "1px solid #333", paddingBottom: "4px" }} />
+            <div style={{ fontSize: "11px", color: "#6d7175", marginTop: "6px" }}>Signature</div>
+          </div>
+        </div>
       </div>
     </>
   );
