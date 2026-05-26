@@ -1,7 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
-import { Page, Card, Text, BlockStack, TextField, Button, InlineStack, Divider, Banner } from "@shopify/polaris";
+import { useState } from "react";
+import { Page, Card, Text, BlockStack, TextField, Button, InlineStack, Divider, Banner, Checkbox } from "@shopify/polaris";
 import prisma from "../db.server";
 import { seedDefaultRulesIfEmpty } from "../transit.server";
 
@@ -19,12 +20,30 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = form.get("intent") as string;
 
   if (intent === "save-thresholds") {
+    const dontShipAbove = parseInt(form.get("dontShipAbove") as string);
+    const icePackAbove  = parseInt(form.get("icePackAbove")  as string);
+    const dontShipBelow = parseInt(form.get("dontShipBelow") as string);
+    const cautionBelow  = parseInt(form.get("cautionBelow")  as string);
+    console.log("[save-thresholds] received:", { dontShipAbove, icePackAbove, dontShipBelow, cautionBelow });
+    const data = {
+      ...(isFinite(dontShipAbove) && { dontShipAbove }),
+      ...(isFinite(icePackAbove)  && { icePackAbove }),
+      ...(isFinite(dontShipBelow) && { dontShipBelow }),
+      ...(isFinite(cautionBelow)  && { cautionBelow }),
+    };
+    console.log("[save-thresholds] saving:", data);
     await prisma.appSettings.upsert({
       where: { id: "singleton" },
-      update: {
-        dontShipAbove: parseInt(form.get("dontShipAbove") as string) || 90,
-        icePackAbove: parseInt(form.get("icePackAbove") as string) || 80,
-      },
+      update: data,
+      create: { id: "singleton" },
+    });
+    return json({ ok: true, intent });
+  }
+
+  if (intent === "save-print-settings") {
+    await prisma.appSettings.upsert({
+      where: { id: "singleton" },
+      update: { printLocalOrders: form.get("printLocalOrders") === "true" },
       create: { id: "singleton" },
     });
     return json({ ok: true, intent });
@@ -57,6 +76,12 @@ export default function Settings() {
   const isSaving = fetcher.state !== "idle";
   const saved = fetcher.state === "idle" && (fetcher.data as any)?.ok;
 
+  const [dontShipAbove, setDontShipAbove] = useState(String(settings.dontShipAbove));
+  const [icePackAbove, setIcePackAbove] = useState(String(settings.icePackAbove));
+  const [dontShipBelow, setDontShipBelow] = useState(String(settings.dontShipBelow));
+  const [cautionBelow, setCautionBelow] = useState(String(settings.cautionBelow));
+  const [printLocalOrders, setPrintLocalOrders] = useState(settings.printLocalOrders);
+
   return (
     <Page title="Settings">
       <BlockStack gap="500">
@@ -68,33 +93,89 @@ export default function Settings() {
             <Text as="p" variant="bodySm" tone="subdued">
               Based on the forecast high on the estimated delivery day.
             </Text>
-            <fetcher.Form method="post">
-              <input type="hidden" name="intent" value="save-thresholds" />
-              <BlockStack gap="300">
-                <TextField
-                  label="Do not ship above (°F)"
-                  name="dontShipAbove"
-                  type="number"
-                  defaultValue={String(settings.dontShipAbove)}
-                  helpText="Red alert — hold the shipment"
-                  autoComplete="off"
-                />
-                <TextField
-                  label="Ice pack required above (°F)"
-                  name="icePackAbove"
-                  type="number"
-                  defaultValue={String(settings.icePackAbove)}
-                  helpText="Orange alert — include ice pack and consider faster shipping"
-                  autoComplete="off"
-                />
-                <InlineStack gap="300" blockAlign="center">
-                  <Button submit loading={isSaving} variant="primary">Save thresholds</Button>
-                  {saved && (fetcher.data as any)?.intent === "save-thresholds" && (
-                    <Text as="span" variant="bodySm" tone="success">Saved</Text>
+            <BlockStack gap="300">
+              <TextField
+                label="Do not ship above (°F)"
+                name="dontShipAbove"
+                type="number"
+                value={dontShipAbove}
+                onChange={setDontShipAbove}
+                helpText="Red alert — hold the shipment"
+                autoComplete="off"
+              />
+              <TextField
+                label="Ice pack required above (°F)"
+                name="icePackAbove"
+                type="number"
+                value={icePackAbove}
+                onChange={setIcePackAbove}
+                helpText="Orange alert — include ice pack and consider faster shipping"
+                autoComplete="off"
+              />
+              <TextField
+                label="Do not ship below (°F)"
+                name="dontShipBelow"
+                type="number"
+                value={dontShipBelow}
+                onChange={setDontShipBelow}
+                helpText="Red alert — low too cold, hold the shipment"
+                autoComplete="off"
+              />
+              <TextField
+                label="Heat pack caution below (°F)"
+                name="cautionBelow"
+                type="number"
+                value={cautionBelow}
+                onChange={setCautionBelow}
+                helpText="Orange alert — include heat pack and monitor conditions"
+                autoComplete="off"
+              />
+              <InlineStack gap="300" blockAlign="center">
+                <Button
+                  loading={isSaving}
+                  variant="primary"
+                  onClick={() => fetcher.submit(
+                    { intent: "save-thresholds", dontShipAbove, icePackAbove, dontShipBelow, cautionBelow },
+                    { method: "post" },
                   )}
-                </InlineStack>
-              </BlockStack>
-            </fetcher.Form>
+                >
+                  Save thresholds
+                </Button>
+                {saved && (fetcher.data as any)?.intent === "save-thresholds" && (
+                  <Text as="span" variant="bodySm" tone="success">Saved</Text>
+                )}
+              </InlineStack>
+            </BlockStack>
+          </BlockStack>
+        </Card>
+
+        {/* Print settings */}
+        <Card>
+          <BlockStack gap="400">
+            <Text as="h2" variant="headingMd">Print settings</Text>
+            <BlockStack gap="300">
+              <Checkbox
+                label="Include local orders in batch print"
+                helpText="When off, local orders are skipped when printing a batch. Reship orders always print first, then oldest to newest."
+                checked={printLocalOrders}
+                onChange={setPrintLocalOrders}
+              />
+              <InlineStack gap="300" blockAlign="center">
+                <Button
+                  loading={isSaving}
+                  variant="primary"
+                  onClick={() => fetcher.submit(
+                    { intent: "save-print-settings", printLocalOrders: String(printLocalOrders) },
+                    { method: "post" },
+                  )}
+                >
+                  Save
+                </Button>
+                {saved && (fetcher.data as any)?.intent === "save-print-settings" && (
+                  <Text as="span" variant="bodySm" tone="success">Saved</Text>
+                )}
+              </InlineStack>
+            </BlockStack>
           </BlockStack>
         </Card>
 

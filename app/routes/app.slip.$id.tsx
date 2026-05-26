@@ -208,15 +208,15 @@ export default function PackingSlip() {
       `}</style>
 
       <div className="no-print" style={{ background: "#fff", borderBottom: "1px solid #e1e3e5", padding: "12px 24px", display: "flex", gap: "12px", alignItems: "center" }}>
-        <button onClick={() => navigate("/app")} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: "pointer", fontSize: "13px" }}>← Back</button>
+        <button type="button" onClick={() => navigate("/app")} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: "pointer", fontSize: "13px" }}>← Back</button>
         {nav && (
           <div style={{ marginLeft: "auto", display: "flex", gap: "8px", alignItems: "center" }}>
             <span style={{ fontSize: "12px", color: "#6d7175" }}>{nav.index + 1} / {nav.ids.length}</span>
-            <button onClick={() => navigate(`/app/slip/${nav.ids[nav.index - 1]}?ids=${nav.ids.join(",")}&i=${nav.index - 1}`)} disabled={nav.index === 0} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: nav.index === 0 ? "default" : "pointer", fontSize: "13px", opacity: nav.index === 0 ? 0.4 : 1 }}>‹ Prev</button>
-            <button onClick={() => navigate(`/app/slip/${nav.ids[nav.index + 1]}?ids=${nav.ids.join(",")}&i=${nav.index + 1}`)} disabled={nav.index === nav.ids.length - 1} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: nav.index === nav.ids.length - 1 ? "default" : "pointer", fontSize: "13px", opacity: nav.index === nav.ids.length - 1 ? 0.4 : 1 }}>Next ›</button>
+            <button type="button" onClick={() => navigate(`/app/slip/${nav.ids[nav.index - 1]}?ids=${nav.ids.join(",")}&i=${nav.index - 1}`)} disabled={nav.index === 0} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: nav.index === 0 ? "default" : "pointer", fontSize: "13px", opacity: nav.index === 0 ? 0.4 : 1 }}>‹ Prev</button>
+            <button type="button" onClick={() => navigate(`/app/slip/${nav.ids[nav.index + 1]}?ids=${nav.ids.join(",")}&i=${nav.index + 1}`)} disabled={nav.index === nav.ids.length - 1} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: nav.index === nav.ids.length - 1 ? "default" : "pointer", fontSize: "13px", opacity: nav.index === nav.ids.length - 1 ? 0.4 : 1 }}>Next ›</button>
           </div>
         )}
-        <button onClick={() => window.print()} style={{ background: "#1a1a1a", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 18px", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Print</button>
+        <button type="button" onClick={() => window.print()} style={{ background: "#1a1a1a", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 18px", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Print</button>
         {weather && (
           <span style={{ fontSize: "13px", color: "#6d7175" }}>
             Ships <strong>{shipDate}</strong> · Arrives <strong>{weather.deliveryDate}</strong>
