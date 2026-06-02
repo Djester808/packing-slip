@@ -1,8 +1,9 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useNavigate } from "@remix-run/react";
+import { useLoaderData, useNavigate, useNavigation } from "@remix-run/react";
 import { useState } from "react";
 import { shopifyGraphQL } from "../admin-api.server";
+import { getShopMeta } from "../shop.server";
 import { getTempRange, addBusinessDays, toDateString, nextShipDate } from "../weather.server";
 import { getTransitDays } from "../transit.server";
 import { getAlert } from "../alert";
@@ -21,7 +22,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const navIndex = parseInt(url.searchParams.get("i") ?? "-1", 10);
   const gid = `gid://shopify/Order/${orderId}`;
 
-  const [data, shopNameData, shopBrandData] = await Promise.all([
+  // Wave 1: order data + shop metadata in parallel (shop meta is in-memory cached after first hit)
+  const [data, shopMeta] = await Promise.all([
     shopifyGraphQL(
       `query getOrder($id: ID!) {
         order(id: $id) {
@@ -44,47 +46,50 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       }`,
       { id: gid },
     ),
-    shopifyGraphQL(`query { shop { name } }`, {}).catch(() => null),
-    shopifyGraphQL(`query { shop { brand { logo { image { url } } squareLogo { image { url } } } } }`, {}).catch(() => null),
+    getShopMeta(),
   ]);
 
   const o = data.data?.order;
   if (!o) throw new Response("Order not found", { status: 404 });
 
   const customerEmail = o.customer?.email ?? null;
-  let otherOrders: Array<{ id: string; name: string }> = [];
-  if (customerEmail) {
-    const otherData = await shopifyGraphQL(
-      `query getOtherOrders($q: String!) {
-        orders(first: 20, query: $q) {
-          edges { node { id name } }
-        }
-      }`,
-      { q: `email:"${customerEmail}" fulfillment_status:unfulfilled` },
-    ).catch(() => null);
-    otherOrders = (otherData?.data?.orders?.edges ?? [])
-      .map((e: any) => ({ id: e.node.id.split("/").pop(), name: e.node.name }))
-      .filter((r: any) => r.id !== orderId);
-  }
-
-  const shopName: string | null = shopNameData?.data?.shop?.name ?? null;
-  const shopLogoUrl: string | null = shopBrandData?.data?.shop?.brand?.logo?.image?.url
-    ?? shopBrandData?.data?.shop?.brand?.squareLogo?.image?.url
-    ?? null;
-
   const zip = o.shippingAddress?.zip ?? "";
   const shippingMethod = o.shippingLine?.title ?? "";
   const isLocal = isLocalShipping(shippingMethod);
-  const shipDate = nextShipDate();
-  const transitDays = await getTransitDays(shippingMethod, isLocal ? undefined : zip, shipDate, isLocal ? undefined : (o.shippingAddress?.province ?? undefined), isLocal ? undefined : (o.shippingAddress?.city ?? undefined));
+  const { date: shipDate } = nextShipDate();
+
+  // Wave 2: transit days, app settings, and other-orders lookup all in parallel
+  const [transitDays, settings, otherOrdersRaw] = await Promise.all([
+    getTransitDays(
+      shippingMethod,
+      isLocal ? undefined : zip,
+      shipDate,
+      isLocal ? undefined : (o.shippingAddress?.province ?? undefined),
+      isLocal ? undefined : (o.shippingAddress?.city ?? undefined),
+    ),
+    prisma.appSettings.upsert({ where: { id: "singleton" }, update: {}, create: { id: "singleton" } }),
+    customerEmail
+      ? shopifyGraphQL(
+          `query getOtherOrders($q: String!) {
+            orders(first: 20, query: $q) {
+              edges { node { id name } }
+            }
+          }`,
+          { q: `email:"${customerEmail}" fulfillment_status:unfulfilled` },
+        ).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+
+  const otherOrders: Array<{ id: string; name: string }> = (otherOrdersRaw?.data?.orders?.edges ?? [])
+    .map((e: any) => ({ id: e.node.id.split("/").pop(), name: e.node.name }))
+    .filter((r: any) => r.id !== orderId);
+
+  const shopName = shopMeta.name;
+  const shopLogoUrl = shopMeta.logoUrl;
+  const shopDomain = shopMeta.domain;
+
   const deliveryDate = addBusinessDays(shipDate, transitDays);
   const deliveryDateStr = toDateString(deliveryDate);
-
-  const settings = await prisma.appSettings.upsert({
-    where: { id: "singleton" },
-    update: {},
-    create: { id: "singleton" },
-  });
 
   let maxTempF: number | null = null;
   let minTempF: number | null = null;
@@ -169,6 +174,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       })(),
     },
     alert,
+    shopDomain,
   });
 };
 
@@ -177,8 +183,10 @@ const ALERT_ICON: Record<string, string> = {
 };
 
 export default function PackingSlip() {
-  const { order, weather, alert, shopLogoUrl, shopName, nav, otherOrders, shipDate } = useLoaderData<typeof loader>();
+  const { order, weather, alert, shopLogoUrl, shopName, nav, otherOrders, shipDate, shopDomain } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  const navigation = useNavigation();
+  const isLoading = navigation.state === "loading" && navigation.location?.pathname.startsWith("/app/slip");
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const toggleCheck = (i: number) => setChecked((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
 
@@ -186,6 +194,7 @@ export default function PackingSlip() {
     <>
       <style>{`
         @page { size: letter portrait; margin: 0; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; margin: 0 !important; }
@@ -206,6 +215,16 @@ export default function PackingSlip() {
         }
         body { background: #f6f6f7; font-family: Inter, system-ui, sans-serif; margin: 0; }
       `}</style>
+
+      {isLoading && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(255, 255, 255, 0.95)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ width: "48px", height: "48px", border: "3px solid #e1e3e5", borderTop: "3px solid #007a5a", borderRadius: "50%", margin: "0 auto 16px", animation: "spin 1s linear infinite" }} />
+            <div style={{ fontSize: "14px", color: "#1a1a1a", fontWeight: 600, marginBottom: "6px" }}>Loading packing slip…</div>
+            <div style={{ fontSize: "12px", color: "#6d7175" }}>Fetching order details and weather</div>
+          </div>
+        </div>
+      )}
 
       <div className="no-print" style={{ background: "#fff", borderBottom: "1px solid #e1e3e5", padding: "12px 24px", display: "flex", gap: "12px", alignItems: "center" }}>
         <button type="button" onClick={() => navigate("/app")} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: "pointer", fontSize: "13px" }}>← Back</button>
@@ -287,7 +306,16 @@ export default function PackingSlip() {
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", justifyContent: "flex-end" }}>
-              <div style={{ fontSize: "20px", fontWeight: 700 }}>{order.name}</div>
+                  <a
+                    href={shopDomain ? `https://${shopDomain}/admin/orders/${order.id}` : undefined}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (shopDomain) window.open(`https://${shopDomain}/admin/orders/${order.id}`, "_blank", "noopener,noreferrer");
+                    }}
+                    style={{ color: "#1a1a1a", textDecoration: "none", cursor: shopDomain ? "pointer" : "not-allowed" }}
+                  >
+                    <div style={{ fontSize: "20px", fontWeight: 700 }}>{order.name}</div>
+                  </a>
               {order.isReship && <span style={{ background: "#4a0080", border: "1px solid #7c00cc", borderRadius: "4px", padding: "2px 7px", fontSize: "11px", fontWeight: 800, color: "#fff", letterSpacing: "0.04em" }}>RESHIP</span>}
               {order.isLocal && <span style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "4px", padding: "2px 7px", fontSize: "11px", fontWeight: 800, color: "#7d4e00" }}>LOCAL</span>}
             </div>
