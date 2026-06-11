@@ -3,10 +3,10 @@
 client_id = "f4f91fd14d4f47effd6ecddd7d2ac32d"
 application_url = "https://pack-slip.fly.dev"
 embedded = true
-name = "PackSlip Weather"
+name = "AquaSlip"
 
 [access_scopes]
-scopes = "read_orders,read_customers"
+scopes = "read_orders,read_customers,read_products"
 
 [webhooks]
 api_version = "2026-07"

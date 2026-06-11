@@ -38,13 +38,28 @@ model WeatherCache {
   zip       String
   date      String
   maxTempF  Float
+  minTempF  Float?
   cachedAt  DateTime @default(now())
 
   @@unique([zip, date])
 }
 
 model AppSettings {
-  id            String @id @default("singleton")
-  dontShipAbove Int    @default(90)
-  icePackAbove  Int    @default(80)
+  id                String  @id @default("singleton")
+  dontShipAbove     Int     @default(90)
+  icePackAbove      Int     @default(80)
+  dontShipBelow     Int     @default(35)
+  cautionBelow      Int     @default(45)
+  printLocalOrders  Boolean @default(false)
+}
+
+model TransitCache {
+  id       String   @id @default(cuid())
+  zip      String
+  method   String
+  date     String
+  days     Int
+  cachedAt DateTime @default(now())
+
+  @@unique([zip, method, date])
 }

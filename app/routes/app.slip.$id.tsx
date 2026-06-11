@@ -36,7 +36,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
           }
           shippingLine { title }
           lineItems(first: 50) {
-            edges { node { title quantity variant { title sku image { url } product { featuredImage { url } } } } }
+            edges { node { title quantity currentQuantity variant { title sku image { url } product { featuredImage { url } } } } }
           }
           totalPriceSet { presentmentMoney { amount currencyCode } }
           subtotalPriceSet { presentmentMoney { amount currencyCode } }
@@ -56,7 +56,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const zip = o.shippingAddress?.zip ?? "";
   const shippingMethod = o.shippingLine?.title ?? "";
   const isLocal = isLocalShipping(shippingMethod);
-  const { date: shipDate } = nextShipDate();
+  const shipDateParam = url.searchParams.get("shipDate");
+  const shipDate = shipDateParam ? new Date(shipDateParam) : nextShipDate().date;
 
   // Wave 2: transit days, app settings, and other-orders lookup all in parallel
   const [transitDays, settings, otherOrdersRaw] = await Promise.all([
@@ -112,12 +113,22 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 
   const lineItems = (o.lineItems?.edges ?? [])
     .filter((e: any) => !/^tip$/i.test(e.node.title?.trim()))
+    .filter((e: any) => (e.node.currentQuantity ?? e.node.quantity) > 0)
     .map((e: any) => ({
       title: e.node.title,
       variant: e.node.variant?.title && e.node.variant.title !== "Default Title" ? e.node.variant.title : null,
       imageUrl: e.node.variant?.image?.url ?? e.node.variant?.product?.featuredImage?.url ?? null,
-      quantity: e.node.quantity,
-    }));
+      quantity: e.node.currentQuantity ?? e.node.quantity,
+    }))
+    .reduce((acc: any[], item: any) => {
+      const existing = acc.find((i) => i.title === item.title && i.variant === item.variant);
+      if (existing) {
+        existing.quantity += item.quantity;
+      } else {
+        acc.push(item);
+      }
+      return acc;
+    }, []);
 
   const addr = o.shippingAddress;
   const shippingAddress = addr
@@ -202,16 +213,16 @@ export default function PackingSlip() {
             box-shadow: none !important;
             max-width: none !important;
             margin: 0 !important;
-            padding: 12mm !important;
+            padding: 10mm !important;
             border-radius: 0 !important;
-            font-size: 12px !important;
+            font-size: 11px !important;
             page-break-after: always !important;
-            page-break-inside: avoid !important;
-            overflow: hidden !important;
           }
-          .slip table { font-size: 11px !important; page-break-inside: avoid !important; }
-          .slip img { width: 48px !important; height: 48px !important; }
-          table tbody tr { page-break-inside: avoid !important; }
+          .slip:last-child { page-break-after: avoid !important; }
+          .slip table { font-size: 10px !important; }
+          .slip table td { padding: 5px 8px !important; }
+          .slip img { width: 40px !important; height: 40px !important; }
+          .slip table tbody tr { page-break-inside: avoid !important; break-inside: avoid !important; }
         }
         body { background: #f6f6f7; font-family: Inter, system-ui, sans-serif; margin: 0; }
       `}</style>
@@ -235,7 +246,7 @@ export default function PackingSlip() {
             <button type="button" onClick={() => navigate(`/app/slip/${nav.ids[nav.index + 1]}?ids=${nav.ids.join(",")}&i=${nav.index + 1}`)} disabled={nav.index === nav.ids.length - 1} style={{ background: "none", border: "1px solid #c4cdd5", borderRadius: "6px", padding: "6px 14px", cursor: nav.index === nav.ids.length - 1 ? "default" : "pointer", fontSize: "13px", opacity: nav.index === nav.ids.length - 1 ? 0.4 : 1 }}>Next ›</button>
           </div>
         )}
-        <button type="button" onClick={() => window.print()} style={{ background: "#1a1a1a", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 18px", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Print</button>
+        <button type="button" onClick={() => window.open(`/app/print-batch?ids=${order.id}`, "_blank")} style={{ background: "#1a1a1a", color: "#fff", border: "none", borderRadius: "6px", padding: "6px 18px", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Print</button>
         {weather && (
           <span style={{ fontSize: "13px", color: "#6d7175" }}>
             Ships <strong>{shipDate}</strong> · Arrives <strong>{weather.deliveryDate}</strong>
