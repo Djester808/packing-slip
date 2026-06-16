@@ -103,6 +103,16 @@ describe('getPackBadge', () => {
       expect(result).not.toBeNull();
     });
 
+    it('should detect singular snail title', () => {
+      const result = getPackBadge(null, 3, 'Nerite Snail');
+      expect(result).not.toBeNull();
+    });
+
+    it('should NOT detect snail food (anchored like shrimp food)', () => {
+      const result = getPackBadge(null, 2, 'Snail Food');
+      expect(result).toBeNull();
+    });
+
     it('should detect crayfish', () => {
       const result = getPackBadge(null, 2, 'Crayfish Mix');
       expect(result).not.toBeNull();
@@ -121,6 +131,51 @@ describe('getPackBadge', () => {
     it('should return null for non-live animal titles', () => {
       const result = getPackBadge(null, 5, 'Fish Food');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('Food / supplement exclusion (no badge even with an animal word)', () => {
+    it('excludes crab food', () => {
+      expect(getPackBadge(null, 2, 'Crab Cuisine Food')).toBeNull();
+    });
+
+    it('excludes crayfish food', () => {
+      expect(getPackBadge('5 Pack', 2, 'Crayfish Food')).toBeNull();
+    });
+
+    it('excludes snail food/supplements', () => {
+      expect(getPackBadge(null, 2, 'Snail Jello Powder')).toBeNull();
+    });
+
+    it('excludes the "Shrimp King" food brand (not anchored to shrimp$)', () => {
+      expect(getPackBadge(null, 1, 'Shrimp King Color')).toBeNull();
+    });
+
+    it('still badges real crab / crayfish livestock', () => {
+      expect(getPackBadge(null, 10, 'Vampire Crab')?.text).toBe('= 12 TOTAL');
+      expect(getPackBadge(null, 10, 'Electric Blue Crayfish')?.text).toBe('= 12 TOTAL');
+      expect(getPackBadge('5 Pack', 2, 'Crayfish Mix')?.text).toBe('= 12 TOTAL');
+    });
+  });
+
+  describe('Snails match neocaridina (shrimp) logic', () => {
+    it('bare count gets the +1/5 DOA extras, same as shrimp', () => {
+      const snail = getPackBadge(null, 10, 'Nerite Snail');
+      const shrimp = getPackBadge(null, 10, 'Cherry Shrimp');
+      expect(snail).toEqual(shrimp);          // both = 12 TOTAL
+      expect(snail?.text).toBe('= 12 TOTAL');
+    });
+
+    it('numeric pack variant multiplies and adds extras, same as shrimp', () => {
+      const snail = getPackBadge('10 Pack', 3, 'Mystery Snail');
+      const shrimp = getPackBadge('10 Pack', 3, 'Red Shrimp');
+      expect(snail).toEqual(shrimp);          // both = 36 TOTAL (30 + 6)
+      expect(snail?.text).toBe('= 36 TOTAL');
+    });
+
+    it('plural "Snails" title behaves the same', () => {
+      const result = getPackBadge('25 Pack', 2, 'Assassin Snails');
+      expect(result?.text).toBe('= 60 TOTAL'); // 50 + 10 extras, matches Cherry Shrimp test
     });
   });
 

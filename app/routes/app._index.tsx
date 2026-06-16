@@ -7,6 +7,7 @@ import { Page, Card, Text, BlockStack, Box, Badge, InlineStack } from "@shopify/
 import { shopifyGraphQL } from "../admin-api.server";
 import { seedDefaultRulesIfEmpty } from "../transit.server";
 import { nextShipDate } from "../weather.server";
+import { isLiveAnimal } from "../pack-badge";
 import prisma from "../db.server";
 
 const PAGE_SIZE = 25;
@@ -21,6 +22,16 @@ const ORDER_FIELDS = `
 
 function isLocalShipping(method: string) {
   return /local|pickup|pick.?up/i.test(method);
+}
+
+// Wednesday ships only 2-day/overnight service or dry goods. An order may roll
+// forward onto the restricted Wednesday slot only if its method is fast service
+// or it contains no live animals (isLiveAnimal shared with pack-badge).
+const FAST_METHOD_RE = /overnight|next.?day|2.?day|2nd day|two.?day|express/i;
+function isWednesdayEligible(slip: any): boolean {
+  if (FAST_METHOD_RE.test(slip.order?.shippingMethod ?? "")) return true;
+  const items: any[] = slip.order?.lineItems ?? [];
+  return !items.some((li) => isLiveAnimal(li.title ?? ""));
 }
 
 export const loader = async (_: LoaderFunctionArgs) => {
@@ -84,11 +95,11 @@ export const loader = async (_: LoaderFunctionArgs) => {
 
   const { date: nextShip } = nextShipDate();
   const defaultShipDate = nextShip.toISOString().slice(0, 10);
-  return json({ orders, printLocalOrders: settings.printLocalOrders, shopDomain, defaultShipDate });
+  return json({ orders, printLocalOrders: settings.printLocalOrders, rolloverEnabled: settings.rolloverEnabled, shopDomain, defaultShipDate });
 };
 
 export default function Index() {
-  const { orders, printLocalOrders, shopDomain, defaultShipDate } = useLoaderData<typeof loader>();
+  const { orders, printLocalOrders, rolloverEnabled, shopDomain, defaultShipDate } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const navigation = useNavigation();
   const [loadingSlipId, setLoadingSlipId] = useState<string | null>(null);
@@ -100,20 +111,23 @@ export default function Index() {
   const [packableFilter, setPackableFilter] = useState(false);
   const [packableIds, setPackableIds] = useState<Set<string> | null>(null);
   const [fetchingPackable, setFetchingPackable] = useState(false);
-  const [blockedOrders, setBlockedOrders] = useState<Array<{ id: string; name: string; customerName: string; city: string; province: string; zip: string; reason: string }>>([]);
+  const [blockedOrders, setBlockedOrders] = useState<Array<{ id: string; name: string; customerName: string; city: string; province: string; zip: string; createdAt: string; reason: string }>>([]);
 
   // Ship-date modal
   const [showPackableModal, setShowPackableModal] = useState(false);
   const [modalShipDate, setModalShipDate] = useState(defaultShipDate);
   const [modalOrderCutoff, setModalOrderCutoff] = useState("");
   const [activeShipDate, setActiveShipDate] = useState(defaultShipDate);
+  // Per-order ship date (YYYY-MM-DD): the chosen day for orders that pass it, or a
+  // later ship day for orders rolled forward. Drives the badge, View slip, and print.
+  const [orderShipDates, setOrderShipDates] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (navigation.state === "idle") setLoadingSlipId(null);
   }, [navigation.state]);
   const searchTimer = useRef<number | null>(null);
   const [page, setPage] = useState(0);
-  const [colWidths, setColWidths] = useState({ order: 110, customer: 150, shipto: 180, method: 170, status: 120 });
+  const [colWidths, setColWidths] = useState({ order: 110, date: 110, customer: 150, shipto: 180, method: 170, status: 120 });
   const resizingCol = useRef<{ col: keyof typeof colWidths; startX: number; startW: number } | null>(null);
 
   useEffect(() => {
@@ -139,62 +153,109 @@ export default function Index() {
       ? orders.filter((o) => new Date(o.createdAtRaw).getTime() >= cutoffMs)
       : orders;
 
-    const allIds = eligibleOrders.map((o) => o.id);
     const BATCH = 50;
-    const safeIds = new Set<string>();
-    const held: Array<{ id: string; name: string; customerName: string; city: string; province: string; zip: string; reason: string }> = [];
 
-    for (let i = 0; i < allIds.length; i += BATCH) {
-      const chunk = allIds.slice(i, i + BATCH);
-      try {
-        const url = `/api/slips?ids=${chunk.join(",")}&shipDate=${encodeURIComponent(shipDate)}`;
-        const res = await fetch(url);
-        if (res.ok) {
+    // Run all checks for a set of ids against a single ship date. When
+    // requireInRange is set (roll-forward candidates), a slip whose delivery is
+    // beyond the forecast window does NOT count as shippable — we won't roll an
+    // order onto a later date we can't actually validate the weather for.
+    async function checkAgainst(ids: string[], date: string, requireInRange = false) {
+      const passed = new Set<string>();
+      const failedReason = new Map<string, string>();
+      const missing = new Set<string>();
+      const wedEligible = new Map<string, boolean>();
+      for (let i = 0; i < ids.length; i += BATCH) {
+        const chunk = ids.slice(i, i + BATCH);
+        try {
+          const res = await fetch(`/api/slips?ids=${chunk.join(",")}&shipDate=${encodeURIComponent(date)}`);
+          if (!res.ok) continue;
           const slips: any[] = await res.json();
           const returnedIds = new Set(slips.map((s: any) => s.order.id));
           for (const slip of slips) {
             if (!printLocalOrders && slip.order.isLocal) continue;
+            wedEligible.set(slip.order.id, isWednesdayEligible(slip));
             const isDanger = !slip.order.isAccessPoint && slip.alert?.level === "danger";
             const isWeekend = slip.weather?.crossesWeekend === true;
-            if (!isDanger && !isWeekend) {
-              safeIds.add(slip.order.id);
-            } else {
-              const orderInfo = orders.find((o) => o.id === slip.order.id);
+            const outOfRange = slip.weather?.forecastOutOfRange === true;
+            if (!isDanger && !isWeekend && !(requireInRange && outOfRange)) {
+              passed.add(slip.order.id);
+            } else if (isDanger || isWeekend) {
               const reasons: string[] = [];
-              if (isWeekend) reasons.push(`Arrives after weekend — est. ${slip.weather.deliveryDate}`);
-              if (isDanger) reasons.push(slip.alert.headline);
-              held.push({
-                id: slip.order.id,
-                name: orderInfo?.name ?? slip.order.name ?? "",
-                customerName: orderInfo?.customerName ?? "",
-                city: orderInfo?.city ?? "",
-                province: orderInfo?.province ?? "",
-                zip: orderInfo?.zip ?? "",
-                reason: reasons.join("; "),
-              });
+              if (isWeekend) reasons.push(`Too long in transit — would arrive after the weekend (est. ${slip.weather.deliveryDate})`);
+              if (isDanger) reasons.push(`Weather — ${slip.alert.headline}`);
+              failedReason.set(slip.order.id, reasons.join("; "));
             }
+            // requireInRange && outOfRange && no danger/weekend: not passed and no
+            // new reason — the caller keeps the order's existing held reason.
           }
           for (const id of chunk) {
             if (!returnedIds.has(id)) {
               const orderInfo = orders.find((o) => o.id === id);
-              if (orderInfo && !orderInfo.isLocal) {
-                held.push({
-                  id,
-                  name: orderInfo.name,
-                  customerName: orderInfo.customerName,
-                  city: orderInfo.city,
-                  province: orderInfo.province,
-                  zip: orderInfo.zip,
-                  reason: "Unable to check forecast — verify before shipping",
-                });
-              }
+              if (orderInfo && !orderInfo.isLocal) missing.add(id);
             }
           }
-        }
+        } catch {}
+      }
+      return { passed, failedReason, missing, wedEligible };
+    }
+
+    const allIds = eligibleOrders.map((o) => o.id);
+    const shipDates: Record<string, string> = {};
+    const wedEligible = new Map<string, boolean>();
+
+    // Pass 1: the chosen ship date.
+    const p1 = await checkAgainst(allIds, shipDate);
+    for (const [id, v] of p1.wedEligible) wedEligible.set(id, v);
+    const safeIds = new Set<string>(p1.passed);
+    for (const id of p1.passed) shipDates[id] = shipDate;
+
+    const heldReason = new Map<string, string>(p1.failedReason);
+    for (const id of p1.missing) heldReason.set(id, "Unable to check forecast — verify before shipping");
+
+    // Roll the held orders forward through the upcoming ship days (this week's
+    // remaining days, then next week) and ship each on the earliest that clears
+    // both the weather and the weekend/transit check. Wednesday is offered only to
+    // eligible orders; weekend-stuck orders typically clear on a next-week Monday.
+    let rollDays: Array<{ date: string; restricted: boolean }> = [];
+    if (rolloverEnabled && heldReason.size > 0) {
+      try {
+        const r = await fetch(`/api/ship-days?after=${encodeURIComponent(shipDate)}`);
+        if (r.ok) rollDays = (await r.json()).days ?? [];
       } catch {}
     }
 
+    for (const { date, restricted } of rollDays) {
+      if (heldReason.size === 0) break;
+      const candidates = restricted
+        ? [...heldReason.keys()].filter((id) => wedEligible.get(id))
+        : [...heldReason.keys()];
+      if (candidates.length === 0) continue;
+      const pass = await checkAgainst(candidates, date, true);
+      for (const [id, v] of pass.wedEligible) wedEligible.set(id, v);
+      for (const id of pass.passed) {
+        safeIds.add(id);
+        shipDates[id] = date;
+        heldReason.delete(id);
+      }
+    }
+
+    // Whatever remains couldn't ship on any eligible day.
+    const held = [...heldReason.entries()].map(([id, reason]) => {
+      const orderInfo = orders.find((o) => o.id === id);
+      return {
+        id,
+        name: orderInfo?.name ?? "",
+        customerName: orderInfo?.customerName ?? "",
+        city: orderInfo?.city ?? "",
+        province: orderInfo?.province ?? "",
+        zip: orderInfo?.zip ?? "",
+        createdAt: orderInfo?.createdAt ?? "",
+        reason,
+      };
+    });
+
     setPackableIds(safeIds);
+    setOrderShipDates(shipDates);
     setBlockedOrders(held);
     setPackableFilter(true);
     setActiveShipDate(shipDate);
@@ -209,6 +270,7 @@ export default function Index() {
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-weight:600;">${o.name}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;">${o.customerName}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#6d7175;">${[o.city, o.province, o.zip].filter(Boolean).join(", ")}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#6d7175;white-space:nowrap;">${o.createdAt}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#c00;font-weight:600;">${o.reason}</td>
         </tr>`)
       .join("");
@@ -232,7 +294,7 @@ export default function Index() {
   <h1>Orders on Hold</h1>
   <div class="subtitle">Generated ${date} &mdash; ${blockedOrders.length} order${blockedOrders.length !== 1 ? "s" : ""} cannot ship today</div>
   <table>
-    <thead><tr><th>Order</th><th>Customer</th><th>Ship to</th><th>Reason</th></tr></thead>
+    <thead><tr><th>Order</th><th>Customer</th><th>Ship to</th><th>Order date</th><th>Reason</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
 </body>
@@ -249,6 +311,14 @@ export default function Index() {
     setPackableFilter(false);
     setPackableIds(null);
     setBlockedOrders([]);
+    setOrderShipDates({});
+  }
+
+  // Format a YYYY-MM-DD ship date as e.g. "Wed, Jun 17" (UTC to avoid tz drift).
+  function formatShipDay(dateStr: string) {
+    return new Date(dateStr + "T00:00:00Z").toLocaleDateString("en-US", {
+      weekday: "short", month: "short", day: "numeric", timeZone: "UTC",
+    });
   }
 
   const q = search.trim().toLowerCase();
@@ -475,7 +545,14 @@ export default function Index() {
                         if (a.isReship !== b.isReship) return a.isReship ? -1 : 1;
                         return new Date(a.createdAtRaw).getTime() - new Date(b.createdAtRaw).getTime();
                       });
-                    if (toPrint.length > 0) window.open(`/app/print-batch?ids=${toPrint.map(o => o.id).join(",")}&shipDate=${encodeURIComponent(activeShipDate)}`, "_blank");
+                    if (toPrint.length > 0) {
+                      // Orders rolled forward to a later ship day print with that date.
+                      const overrides = toPrint
+                        .filter(o => orderShipDates[o.id] && orderShipDates[o.id] !== activeShipDate)
+                        .map(o => `${o.id}:${orderShipDates[o.id]}`);
+                      const sd = overrides.length > 0 ? `&shipDates=${encodeURIComponent(overrides.join(","))}` : "";
+                      window.open(`/app/print-batch?ids=${toPrint.map(o => o.id).join(",")}&shipDate=${encodeURIComponent(activeShipDate)}${sd}`, "_blank");
+                    }
                   }}
                   style={{ background: "#1a1a1a", color: "#fff", border: "none", borderRadius: "6px", padding: "8px 18px", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}
                 >
@@ -509,6 +586,7 @@ export default function Index() {
                     </th>
                     {([
                       { col: "order", label: "Order" },
+                      { col: "date", label: "Order date" },
                       { col: "customer", label: "Customer" },
                       { col: "shipto", label: "Ship to" },
                       { col: "method", label: "Shipping method" },
@@ -554,8 +632,17 @@ export default function Index() {
                               LOCAL
                             </span>
                           )}
+                          {orderShipDates[order.id] && orderShipDates[order.id] !== activeShipDate && (
+                            <span
+                              title={`Held for ${formatShipDay(activeShipDate)} — ships ${formatShipDay(orderShipDates[order.id])}`}
+                              style={{ background: "#e3f1df", border: "1px solid #007a5a", borderRadius: "4px", padding: "1px 6px", fontSize: "10px", fontWeight: 800, color: "#0a5c3e", letterSpacing: "0.03em", pointerEvents: "none", whiteSpace: "nowrap" }}
+                            >
+                              SHIPS {formatShipDay(orderShipDates[order.id]).toUpperCase()}
+                            </span>
+                          )}
                         </span>
                       </td>
+                      <td style={{ padding: "12px 14px", borderBottom: "1px solid #e1e3e5", color: "#6d7175", whiteSpace: "nowrap", pointerEvents: "none" }}>{order.createdAt}</td>
                       <td style={{ padding: "12px 14px", borderBottom: "1px solid #e1e3e5", pointerEvents: "none" }}>{order.customerName}</td>
                       <td style={{ padding: "12px 14px", borderBottom: "1px solid #e1e3e5", color: "#6d7175", pointerEvents: "none" }}>
                         {order.isLocal
@@ -576,7 +663,8 @@ export default function Index() {
                             type="button"
                             onClick={() => {
                               flushSync(() => setLoadingSlipId(order.id));
-                              navigate(`/app/slip/${order.id}?ids=${filteredOrders.map(o => o.id).join(",")}&i=${pageStart + i}&shipDate=${encodeURIComponent(activeShipDate)}`);
+                              const rolled = orderShipDates[order.id] && orderShipDates[order.id] !== activeShipDate ? "&rolled=1" : "";
+                              navigate(`/app/slip/${order.id}?ids=${filteredOrders.map(o => o.id).join(",")}&i=${pageStart + i}&shipDate=${encodeURIComponent(orderShipDates[order.id] ?? activeShipDate)}${rolled}`);
                             }}
                             style={{ background: "none", border: "none", color: "#005bd3", fontSize: "12px", cursor: "pointer", padding: 0, fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}
                           >

@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { useState, useEffect } from "react";
 import { shopifyGraphQL } from "../admin-api.server";
+import { getPackBadge } from "../pack-badge";
 import prisma from "../db.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -17,10 +18,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   ]);
 
   const shipDate = url.searchParams.get("shipDate") ?? null;
+  // Per-order ship-date overrides for orders rolled forward to a later ship day,
+  // encoded as "id:YYYY-MM-DD,id:YYYY-MM-DD".
+  const shipDateOverrides: Record<string, string> = {};
+  for (const pair of url.searchParams.get("shipDates")?.split(",").filter(Boolean) ?? []) {
+    const [id, date] = pair.split(":");
+    if (id && date) shipDateOverrides[id] = date;
+  }
 
   return json({
     ids,
     shipDate,
+    shipDateOverrides,
     shopName: shopNameData?.data?.shop?.name ?? null,
     shopLogoUrl: shopBrandData?.data?.shop?.brand?.logo?.image?.url
       ?? shopBrandData?.data?.shop?.brand?.squareLogo?.image?.url
@@ -35,59 +44,8 @@ const ALERT_ICON: Record<string, string> = {
   danger: "⛔", caution: "⚠️", safe: "✅", unknown: "❓",
 };
 
-// "shrimp$" matches titles ending with "shrimp" (e.g. "Snowball Shrimp") but not "Baby Shrimp Food"
-const LIVE_ANIMAL_RE = /shrimp$|snail|crayfish|crab|culls|skittles|\(s\s*grade\)/i;
-// Shrimp-type and crab products get the +1/5 extras bonus (DOA insurance policy)
-const GETS_EXTRAS_RE = /shrimp$|culls|\(s\s*grade\)|crab/i;
-
-function getPackBadge(variant: string | null, quantity: number, title: string): { text: string; bg: string } | null {
-  // Named pack variants — always live animals, no title check needed
-  if (variant) {
-    if (/breeder\s*pack/i.test(variant) || /ultimate\s*pack/i.test(variant)) {
-      const isUltimate = /ultimate\s*pack/i.test(variant);
-      const total = 10 * quantity;
-      const extras = Math.floor(total / 5);
-      const males = 2 * quantity;
-      const females = 8 * quantity;
-      const label = isUltimate
-        ? `ULTIMATE = ${total + extras} TOTAL (${males}M/${females}F)`
-        : `= ${total + extras} TOTAL (${males}M/${females}F)`;
-      return { text: label, bg: isUltimate ? "#5c007a" : "#007a5a" };
-    }
-  }
-
-  // Skittles shrimp pack: 10 per pack — only when no numeric variant (e.g. v="Normal")
-  // Products like "Skittles Snail Pack" with numeric variants fall through to live animal path below
-  if (/skittles/i.test(title) || (variant && /skittles\s*pack/i.test(variant))) {
-    if (!variant?.match(/\b(\d+)\b/)) {
-      const total = 10 * quantity;
-      const extras = Math.floor(total / 5);
-      return { text: `= ${total + extras} TOTAL`, bg: "#b45309" };
-    }
-  }
-
-  // All other cases: only apply to live animal titles
-  if (!LIVE_ANIMAL_RE.test(title)) return null;
-
-  const getsExtras = GETS_EXTRAS_RE.test(title);
-
-  // Numeric variant → pack size × quantity
-  if (variant) {
-    const m = variant.match(/\b(\d+)\b/);
-    if (m) {
-      const count = parseInt(m[1], 10);
-      if (count > 1) {
-        const total = count * quantity;
-        const extras = getsExtras ? Math.floor(total / 5) : 0;
-        return { text: `= ${total + extras} TOTAL`, bg: "#b45309" };
-      }
-    }
-  }
-
-  // No variant (or non-numeric variant) → quantity is the animal count
-  const extras = getsExtras ? Math.floor(quantity / 5) : 0;
-  return { text: `= ${quantity + extras} TOTAL`, bg: "#b45309" };
-}
+// Pack-badge math lives in ../pack-badge (single source of truth, unit-tested) so
+// printed slips, the single-slip view, and the inventory page always agree.
 
 // Page 1 has less room (header + address take ~40% of the page)
 const ITEMS_PAGE_1 = 8;
@@ -166,7 +124,7 @@ function Signature({ note }: { note: string | null }) {
   );
 }
 
-function SlipView({ slip, shopLogoUrl, shopName }: { slip: any; shopLogoUrl: string | null; shopName: string | null }) {
+function SlipView({ slip, shopLogoUrl, shopName, rolled }: { slip: any; shopLogoUrl: string | null; shopName: string | null; rolled: boolean }) {
   const { order, weather, alert, shipDate } = slip;
   const allItems: any[] = order.lineItems;
 
@@ -183,14 +141,23 @@ function SlipView({ slip, shopLogoUrl, shopName }: { slip: any; shopLogoUrl: str
       {/* Page 1: full header + address + first batch of items */}
       <div className="slip" style={{ maxWidth: "760px", margin: "32px auto", background: "#fff", borderRadius: "8px", boxShadow: "0 1px 4px rgba(0,0,0,0.1)", padding: "40px" }}>
 
+        {rolled && (
+          <div className="slip-banner slip-banner--strong" style={{ background: "#ffd7d5", border: "2px solid #d72c0d", borderRadius: "6px", padding: "12px 14px", marginBottom: "14px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 800, color: "#d72c0d", letterSpacing: "0.02em" }}>🚫 DO NOT SHIP UNTIL {shipDate}</div>
+            <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
+              Rolled forward from the earlier ship day — hold this order until {shipDate}.
+            </div>
+          </div>
+        )}
+
         {order.isReship && (
-          <div style={{ background: "#5c007a", borderRadius: "6px", padding: "8px 14px", marginBottom: "14px" }}>
+          <div className="slip-banner" style={{ background: "#5c007a", borderRadius: "6px", padding: "8px 14px", marginBottom: "14px" }}>
             <span style={{ fontSize: "12px", fontWeight: 800, color: "#fff", letterSpacing: "0.06em" }}>🔄 RESHIP — Verify original order before packing</span>
           </div>
         )}
 
         {order.isAccessPoint && (
-          <div style={{ background: "#0d3880", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
+          <div className="slip-banner" style={{ background: "#0d3880", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 800, color: "#fff", letterSpacing: "0.04em" }}>📦 UPS ACCESS POINT DELIVERY</div>
             <div style={{ fontSize: "11px", color: "#c8d8f8", marginTop: "3px" }}>
               {weather ? `Ships: ${shipDate} · Arrives: ${weather.deliveryDate} · ${weather.transitDays} day${weather.transitDays !== 1 ? "s" : ""}` : "Ship to UPS Store/Access Point — customer will pick up."}
@@ -199,7 +166,7 @@ function SlipView({ slip, shopLogoUrl, shopName }: { slip: any; shopLogoUrl: str
         )}
 
         {weather?.crossesWeekend && (
-          <div style={{ background: "#ffd7d5", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
+          <div className="slip-banner slip-banner--strong" style={{ background: "#ffd7d5", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>🚫 DO NOT SHIP — ARRIVES NEXT WEEK</div>
             <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
               Delivery est. <strong>{weather.deliveryDate}</strong> — holds over the weekend.
@@ -208,13 +175,13 @@ function SlipView({ slip, shopLogoUrl, shopName }: { slip: any; shopLogoUrl: str
         )}
 
         {order.isLocal && (
-          <div style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
+          <div className="slip-banner" style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#7d4e00" }}>📦 LOCAL ORDER — no weather check needed</div>
           </div>
         )}
 
         {weather && alert && (
-          <div style={{ background: alert.bg, border: `1px solid ${alert.color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
+          <div className={`slip-banner ${alert.level === "danger" ? "slip-banner--strong" : ""}`} style={{ background: alert.bg, border: `1px solid ${alert.color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: alert.color }}>
               {ALERT_ICON[alert.level]} {alert.headline}
             </div>
@@ -328,7 +295,7 @@ function SlipView({ slip, shopLogoUrl, shopName }: { slip: any; shopLogoUrl: str
 }
 
 export default function PrintBatch() {
-  const { ids, shipDate, shopLogoUrl, shopName, printLocalOrders } = useLoaderData<typeof loader>();
+  const { ids, shipDate, shipDateOverrides, shopLogoUrl, shopName, printLocalOrders } = useLoaderData<typeof loader>();
   const [slips, setSlips] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(0);
   const [loadError, setLoadError] = useState(false);
@@ -344,15 +311,26 @@ export default function PrintBatch() {
       const allSlips: any[] = [];
       await Promise.all(chunks.map(async (chunk) => {
         if (cancelled) return;
+        // Within a chunk, group orders by their effective ship date so each group
+        // is fetched with its own date and shows the right forecast.
+        const groups = new Map<string | null, string[]>();
+        for (const id of chunk) {
+          const d = shipDateOverrides[id] ?? shipDate;
+          if (!groups.has(d)) groups.set(d, []);
+          groups.get(d)!.push(id);
+        }
         try {
-          const res = await fetch(`/api/slips?ids=${chunk.join(",")}${shipDate ? `&shipDate=${encodeURIComponent(shipDate)}` : ""}`);
-          if (res.ok && !cancelled) {
-            const batch: any[] = await res.json();
-            if (!cancelled) {
-              batch.filter((s) => s && (printLocalOrders || !s.order.isLocal)).forEach((s) => allSlips.push(s));
+          for (const [d, gids] of groups) {
+            if (cancelled) return;
+            const res = await fetch(`/api/slips?ids=${gids.join(",")}${d ? `&shipDate=${encodeURIComponent(d)}` : ""}`);
+            if (res.ok && !cancelled) {
+              const batch: any[] = await res.json();
+              if (!cancelled) {
+                batch.filter((s) => s && (printLocalOrders || !s.order.isLocal)).forEach((s) => allSlips.push(s));
+              }
+            } else if (!res.ok && !cancelled) {
+              setLoadError(true);
             }
-          } else if (!res.ok && !cancelled) {
-            setLoadError(true);
           }
         } catch {
           if (!cancelled) setLoadError(true);
@@ -396,6 +374,10 @@ export default function PrintBatch() {
           .slip table td { padding: 5px 8px !important; }
           .slip img { width: 40px !important; height: 40px !important; }
           .slip table tbody tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+          /* Banners print legibly in black & white: dark text, white fill, solid black border */
+          .slip-banner { background: #fff !important; border: 1.5pt solid #000 !important; }
+          .slip-banner, .slip-banner * { color: #000 !important; }
+          .slip-banner--strong { border-width: 3pt !important; }
         }
         body { background: #f6f6f7; font-family: Inter, system-ui, sans-serif; margin: 0; }
       `}</style>
@@ -451,7 +433,7 @@ export default function PrintBatch() {
       )}
 
       {slips.map((slip) => (
-        <SlipView key={slip.order.id} slip={slip} shopLogoUrl={shopLogoUrl} shopName={shopName} />
+        <SlipView key={slip.order.id} slip={slip} shopLogoUrl={shopLogoUrl} shopName={shopName} rolled={!!shipDateOverrides[slip.order.id]} />
       ))}
     </>
   );

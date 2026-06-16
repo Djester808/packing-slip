@@ -58,6 +58,8 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const isLocal = isLocalShipping(shippingMethod);
   const shipDateParam = url.searchParams.get("shipDate");
   const shipDate = shipDateParam ? new Date(shipDateParam) : nextShipDate().date;
+  // Set when the order was rolled forward to a later ship day than the one chosen.
+  const rolled = url.searchParams.get("rolled") === "1";
 
   // Wave 2: transit days, app settings, and other-orders lookup all in parallel
   const [transitDays, settings, otherOrdersRaw] = await Promise.all([
@@ -185,6 +187,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       })(),
     },
     alert,
+    rolled,
     shopDomain,
   });
 };
@@ -194,7 +197,7 @@ const ALERT_ICON: Record<string, string> = {
 };
 
 export default function PackingSlip() {
-  const { order, weather, alert, shopLogoUrl, shopName, nav, otherOrders, shipDate, shopDomain } = useLoaderData<typeof loader>();
+  const { order, weather, alert, shopLogoUrl, shopName, nav, otherOrders, shipDate, rolled, shopDomain } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading" && navigation.location?.pathname.startsWith("/app/slip");
@@ -223,6 +226,10 @@ export default function PackingSlip() {
           .slip table td { padding: 5px 8px !important; }
           .slip img { width: 40px !important; height: 40px !important; }
           .slip table tbody tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+          /* Banners print legibly in black & white: dark text, white fill, solid black border */
+          .slip-banner { background: #fff !important; border: 1.5pt solid #000 !important; }
+          .slip-banner, .slip-banner * { color: #000 !important; }
+          .slip-banner--strong { border-width: 3pt !important; }
         }
         body { background: #f6f6f7; font-family: Inter, system-ui, sans-serif; margin: 0; }
       `}</style>
@@ -261,14 +268,23 @@ export default function PackingSlip() {
 
       <div className="slip" style={{ maxWidth: "760px", margin: "32px auto", background: "#fff", borderRadius: "8px", boxShadow: "0 1px 4px rgba(0,0,0,0.1)", padding: "40px" }}>
 
+        {rolled && (
+          <div className="slip-banner slip-banner--strong" style={{ background: "#ffd7d5", border: "2px solid #d72c0d", borderRadius: "6px", padding: "12px 14px", marginBottom: "14px" }}>
+            <div style={{ fontSize: "15px", fontWeight: 800, color: "#d72c0d", letterSpacing: "0.02em" }}>🚫 DO NOT SHIP UNTIL {shipDate}</div>
+            <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
+              Rolled forward from the earlier ship day — hold this order until {shipDate}.
+            </div>
+          </div>
+        )}
+
         {order.isReship && (
-          <div style={{ background: "#5c007a", borderRadius: "6px", padding: "8px 14px", marginBottom: "14px" }}>
+          <div className="slip-banner" style={{ background: "#5c007a", borderRadius: "6px", padding: "8px 14px", marginBottom: "14px" }}>
             <span style={{ fontSize: "12px", fontWeight: 800, color: "#fff", letterSpacing: "0.06em" }}>🔄 RESHIP — Verify original order before packing</span>
           </div>
         )}
 
         {weather?.crossesWeekend && (
-          <div style={{ background: "#ffd7d5", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
+          <div className="slip-banner slip-banner--strong" style={{ background: "#ffd7d5", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>🚫 DO NOT SHIP — ARRIVES NEXT WEEK</div>
             <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
               Delivery est. <strong>{weather.deliveryDate}</strong> — holds over the weekend.
@@ -277,7 +293,7 @@ export default function PackingSlip() {
         )}
 
         {otherOrders.length > 0 && (
-          <div style={{ background: "#fff0f0", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
+          <div className="slip-banner" style={{ background: "#fff0f0", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>
               ⚠️ {otherOrders.length} other unfulfilled order{otherOrders.length !== 1 ? "s" : ""} from this customer
             </div>
@@ -288,13 +304,13 @@ export default function PackingSlip() {
         )}
 
         {order.isLocal && (
-          <div style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
+          <div className="slip-banner" style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#7d4e00" }}>📦 LOCAL ORDER — no weather check needed</div>
           </div>
         )}
 
         {weather && alert && (
-          <div style={{ background: alert.bg, border: `1px solid ${alert.color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
+          <div className={`slip-banner ${alert.level === "danger" ? "slip-banner--strong" : ""}`} style={{ background: alert.bg, border: `1px solid ${alert.color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: alert.color }}>
               {ALERT_ICON[alert.level]} {alert.headline}
             </div>

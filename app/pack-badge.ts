@@ -1,6 +1,17 @@
-const LIVE_ANIMAL_RE = /shrimp$|snail|crayfish|crab|culls|skittles|\(s\s*grade\)/i;
-// Shrimp-type, crab, crayfish, skittles and cull products get the +1/5 extras bonus (DOA insurance policy)
-const GETS_EXTRAS_RE = /shrimp$|culls|\(s\s*grade\)|crab|skittles|crayfish/i;
+// Live-animal keywords. "shrimp$"/"snails?$" are anchored to the end (so "Baby
+// Shrimp Food" / "Shrimp King" food don't match); the others can appear anywhere
+// (e.g. "Crayfish Mix"). Caridina shrimp are titled "... Shrimp" (caridina is only
+// a collection name), so shrimp$ already covers them.
+const LIVE_ANIMAL_RE = /shrimp$|snails?$|crayfish|crab|culls?|skittles|\(s\s*grade\)/i;
+// Food / supplements / tools that may contain an animal word but are NOT livestock.
+// Applied to every keyword so "Crab Cuisine Food", "Crayfish Food", etc. never badge.
+const NON_ANIMAL_RE = /\b(food|cuisine|pellet|wafer|flake|gel|powder|supplement|formula|feed|diet|treat|net|trap)\b/i;
+
+// True for live animals only. Every live animal gets the +1/5 extras bonus (DOA
+// insurance) — snails, crabs, crayfish and caridina are all counted like neocaridina.
+export function isLiveAnimal(title: string): boolean {
+  return LIVE_ANIMAL_RE.test(title) && !NON_ANIMAL_RE.test(title);
+}
 
 export function getPackBadgeTotal(
   variant: string | null,
@@ -16,10 +27,8 @@ export function getPackBadgeTotal(
     }
   }
 
-  // All other cases: only apply to live animal titles
-  if (!LIVE_ANIMAL_RE.test(title)) return quantity;
-
-  const getsExtras = GETS_EXTRAS_RE.test(title);
+  // All other cases: only apply to live animals (every live animal gets extras)
+  if (!isLiveAnimal(title)) return quantity;
 
   // Numeric variant → pack size × quantity
   if (variant) {
@@ -28,15 +37,13 @@ export function getPackBadgeTotal(
       const count = parseInt(m[1], 10);
       if (count > 1) {
         const total = count * quantity;
-        const extras = getsExtras ? Math.floor(total / 5) : 0;
-        return total + extras;
+        return total + Math.floor(total / 5);
       }
     }
   }
 
   // No variant (or non-numeric variant) → quantity is the animal count
-  const extras = getsExtras ? Math.floor(quantity / 5) : 0;
-  return quantity + extras;
+  return quantity + Math.floor(quantity / 5);
 }
 
 export function getPackBadge(
@@ -59,10 +66,8 @@ export function getPackBadge(
     }
   }
 
-  // All other cases: only apply to live animal titles
-  if (!LIVE_ANIMAL_RE.test(title)) return null;
-
-  const getsExtras = GETS_EXTRAS_RE.test(title);
+  // All other cases: only apply to live animals (every live animal gets extras)
+  if (!isLiveAnimal(title)) return null;
 
   // Numeric variant → pack size × quantity
   if (variant) {
@@ -71,13 +76,11 @@ export function getPackBadge(
       const count = parseInt(m[1], 10);
       if (count > 1) {
         const total = count * quantity;
-        const extras = getsExtras ? Math.floor(total / 5) : 0;
-        return { text: `= ${total + extras} TOTAL`, bg: "#b45309" };
+        return { text: `= ${total + Math.floor(total / 5)} TOTAL`, bg: "#b45309" };
       }
     }
   }
 
   // No variant (or non-numeric variant) → quantity is the animal count
-  const extras = getsExtras ? Math.floor(quantity / 5) : 0;
-  return { text: `= ${quantity + extras} TOTAL`, bg: "#b45309" };
+  return { text: `= ${quantity + Math.floor(quantity / 5)} TOTAL`, bg: "#b45309" };
 }

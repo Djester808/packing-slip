@@ -49,6 +49,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ ok: true, intent });
   }
 
+  if (intent === "save-rollover-settings") {
+    await prisma.appSettings.upsert({
+      where: { id: "singleton" },
+      update: { rolloverEnabled: form.get("rolloverEnabled") === "true" },
+      create: { id: "singleton" },
+    });
+    return json({ ok: true, intent });
+  }
+
   if (intent === "add-rule") {
     const keyword = (form.get("keyword") as string).trim().toLowerCase();
     const days = parseInt(form.get("transitDays") as string);
@@ -81,6 +90,7 @@ export default function Settings() {
   const [dontShipBelow, setDontShipBelow] = useState(String(settings.dontShipBelow));
   const [cautionBelow, setCautionBelow] = useState(String(settings.cautionBelow));
   const [printLocalOrders, setPrintLocalOrders] = useState(settings.printLocalOrders);
+  const [rolloverEnabled, setRolloverEnabled] = useState(settings.rolloverEnabled);
 
   return (
     <Page title="Settings">
@@ -172,6 +182,36 @@ export default function Settings() {
                   Save
                 </Button>
                 {saved && (fetcher.data as any)?.intent === "save-print-settings" && (
+                  <Text as="span" variant="bodySm" tone="success">Saved</Text>
+                )}
+              </InlineStack>
+            </BlockStack>
+          </BlockStack>
+        </Card>
+
+        {/* Shippable order calculation */}
+        <Card>
+          <BlockStack gap="400">
+            <Text as="h2" variant="headingMd">Shippable order calculation</Text>
+            <BlockStack gap="300">
+              <Checkbox
+                label="Roll orders forward to a later ship day"
+                helpText="When on, an order that can't ship on the selected day but clears a later ship day (Monday → Tuesday, plus Wednesday for 2-day/overnight/dry-goods orders) is added to the shippable list, tagged with that later date. When off, those orders stay on the hold list."
+                checked={rolloverEnabled}
+                onChange={setRolloverEnabled}
+              />
+              <InlineStack gap="300" blockAlign="center">
+                <Button
+                  loading={isSaving}
+                  variant="primary"
+                  onClick={() => fetcher.submit(
+                    { intent: "save-rollover-settings", rolloverEnabled: String(rolloverEnabled) },
+                    { method: "post" },
+                  )}
+                >
+                  Save
+                </Button>
+                {saved && (fetcher.data as any)?.intent === "save-rollover-settings" && (
                   <Text as="span" variant="bodySm" tone="success">Saved</Text>
                 )}
               </InlineStack>

@@ -51,6 +51,8 @@ model AppSettings {
   dontShipBelow     Int     @default(35)
   cautionBelow      Int     @default(45)
   printLocalOrders  Boolean @default(false)
+  rolloverEnabled   Boolean @default(true)
+  delayEmailTemplate String @default("")
 }
 
 model TransitCache {

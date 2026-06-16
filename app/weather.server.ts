@@ -112,9 +112,10 @@ function isHoliday(date: Date): boolean {
   return HOLIDAY_DATES.has(toDateString(date));
 }
 
-// Tuesday is the primary ship day (cutoff 1 PM Central).
-// After cutoff, Wednesday ships (dry goods + 2-day/overnight only).
-// If Tuesday is a holiday, Wednesday ships with the same restriction.
+// Monday and Tuesday are the primary ship days (cutoff 1 PM Central each day).
+// After the Tuesday cutoff — or when Tuesday is a holiday — Wednesday ships with a
+// restriction (dry goods + 2-day/overnight only). Holidays (usually Mondays) are
+// skipped. Any day from Wednesday on rolls to the next week's Monday.
 export function nextShipDate(now: Date = new Date()): { date: Date; isWednesdayOnly: boolean } {
   // Use formatToParts — avoids re-parsing a locale string, which fails on Alpine
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -130,20 +131,66 @@ export function nextShipDate(now: Date = new Date()): { date: Date; isWednesdayO
     return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n));
   }
 
-  if (dow === 2 && hour >= 13) {
-    const wed = addDays(today, 1);
+  // Roll to the next week's ship slot: Monday, then Tuesday, then restricted Wednesday.
+  function nextWeek(): { date: Date; isWednesdayOnly: boolean } {
+    let d = (1 - dow + 7) % 7;
+    if (d === 0) d = 7;
+    const mon = addDays(today, d);
+    if (!isHoliday(mon)) return { date: mon, isWednesdayOnly: false };
+    const tue = addDays(mon, 1);
+    if (!isHoliday(tue)) return { date: tue, isWednesdayOnly: false };
+    const wed = addDays(mon, 2);
     if (!isHoliday(wed)) return { date: wed, isWednesdayOnly: true };
-    return { date: addDays(today, 7), isWednesdayOnly: false };
+    return { date: addDays(mon, 7), isWednesdayOnly: false };
   }
 
-  const daysToTue = dow === 2 ? 0 : (2 - dow + 7) % 7;
-  const tue = addDays(today, daysToTue);
-  if (!isHoliday(tue)) return { date: tue, isWednesdayOnly: false };
+  // Monday or Tuesday before cutoff (and not a holiday) → ship today.
+  if ((dow === 1 || dow === 2) && hour < 13 && !isHoliday(today)) {
+    return { date: today, isWednesdayOnly: false };
+  }
 
-  const wed = addDays(tue, 1);
-  if (!isHoliday(wed)) return { date: wed, isWednesdayOnly: true };
+  // Monday after cutoff or holiday Monday → Tuesday, then Wednesday overflow.
+  if (dow === 1) {
+    const tue = addDays(today, 1);
+    if (!isHoliday(tue)) return { date: tue, isWednesdayOnly: false };
+    const wed = addDays(today, 2);
+    if (!isHoliday(wed)) return { date: wed, isWednesdayOnly: true };
+    return nextWeek();
+  }
 
-  return { date: addDays(tue, 7), isWednesdayOnly: false };
+  // Tuesday after cutoff or holiday Tuesday → restricted Wednesday, else next week.
+  if (dow === 2) {
+    const wed = addDays(today, 1);
+    if (!isHoliday(wed)) return { date: wed, isWednesdayOnly: true };
+    return nextWeek();
+  }
+
+  // Wednesday–Sunday → next week's Monday.
+  return nextWeek();
+}
+
+// The remaining ship days in the SAME week, strictly after `after`, in order.
+// Tuesday is unrestricted; Wednesday is restricted (2-day/overnight/dry goods).
+// Holidays are skipped. Roll-forward stays within the current shipping week — an
+// order that can't arrive this week without sitting over the weekend is held, not
+// pushed into next week.
+//   Monday    → [Tuesday, Wednesday]
+//   Tuesday   → [Wednesday]
+//   Wednesday → []
+export function remainingShipDaysThisWeek(after: Date): Array<{ date: Date; restricted: boolean }> {
+  const base = new Date(Date.UTC(after.getUTCFullYear(), after.getUTCMonth(), after.getUTCDate()));
+  const dow = base.getUTCDay();
+  function addDays(d: Date, n: number): Date {
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n));
+  }
+  const out: Array<{ date: Date; restricted: boolean }> = [];
+  for (const target of [2, 3] as const) { // Tuesday, then Wednesday
+    if (dow >= 1 && dow < target) {
+      const d = addDays(base, target - dow);
+      if (!isHoliday(d)) out.push({ date: d, restricted: target === 3 });
+    }
+  }
+  return out;
 }
 
 export function addBusinessDays(from: Date, days: number): Date {
