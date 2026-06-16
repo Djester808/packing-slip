@@ -6,7 +6,7 @@ embedded = true
 name = "AquaSlip"
 
 [access_scopes]
-scopes = "read_orders,read_customers,read_products"
+scopes = "read_orders,write_orders,read_customers,read_products"
 
 [webhooks]
 api_version = "2026-07"
@@ -14,6 +14,10 @@ api_version = "2026-07"
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/uninstalled"
   topics = [ "app/uninstalled" ]
+
+  [[webhooks.subscriptions]]
+  uri = "api/webhooks/order-create"
+  topics = [ "orders/create" ]
 
 [auth]
 redirect_urls = [ "https://pack-slip.fly.dev/auth/callback" ]
