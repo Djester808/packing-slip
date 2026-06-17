@@ -31,7 +31,7 @@ const FAST_METHOD_RE = /overnight|next.?day|2.?day|2nd day|two.?day|express/i;
 function isWednesdayEligible(slip: any): boolean {
   if (FAST_METHOD_RE.test(slip.order?.shippingMethod ?? "")) return true;
   const items: any[] = slip.order?.lineItems ?? [];
-  return !items.some((li) => isLiveAnimal(li.title ?? ""));
+  return !items.some((li) => isLiveAnimal(li.title ?? "", li.isFish));
 }
 
 export const loader = async (_: LoaderFunctionArgs) => {
@@ -267,7 +267,7 @@ export default function Index() {
     const date = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
     const rows = blockedOrders
       .map((o) => `<tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-weight:600;">${o.name}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-weight:600;">${shopDomain ? `<a href="https://${shopDomain}/admin/orders/${o.id}" target="_blank" rel="noopener noreferrer" style="color:#005bd3;text-decoration:none;">${o.name}</a>` : o.name}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;">${o.customerName}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#6d7175;">${[o.city, o.province, o.zip].filter(Boolean).join(", ")}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#6d7175;white-space:nowrap;">${o.createdAt}</td>

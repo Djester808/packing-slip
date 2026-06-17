@@ -7,9 +7,23 @@ const LIVE_ANIMAL_RE = /shrimp$|snails?$|crayfish|crab|culls?|skittles|\(s\s*gra
 // Applied to every keyword so "Crab Cuisine Food", "Crayfish Food", etc. never badge.
 const NON_ANIMAL_RE = /\b(food|cuisine|pellet|wafer|flake|gel|powder|supplement|formula|feed|diet|treat|net|trap)\b/i;
 
-// True for live animals only. Every live animal gets the +1/5 extras bonus (DOA
-// insurance) — snails, crabs, crayfish and caridina are all counted like neocaridina.
-export function isLiveAnimal(title: string): boolean {
+// Products in a livestock collection (e.g. "Freshwater Fish") are live animals even
+// when the title has no animal keyword (fish are named by species). Matches the
+// collection handle ("freshwater-fish") or title ("Freshwater Fish").
+const LIVESTOCK_COLLECTION_RE = /freshwater.?fish/i;
+export function isLivestockCollection(
+  collections: Array<{ handle?: string | null; title?: string | null }>,
+): boolean {
+  return collections.some(
+    (c) => LIVESTOCK_COLLECTION_RE.test(c.handle ?? "") || LIVESTOCK_COLLECTION_RE.test(c.title ?? ""),
+  );
+}
+
+// True for live animals. Every live animal gets the +1/5 extras bonus (DOA insurance)
+// — snails, crabs, crayfish, caridina and fish are all counted like neocaridina.
+// `isLivestock` (e.g. from collection membership) forces a title to count as live.
+export function isLiveAnimal(title: string, isLivestock = false): boolean {
+  if (isLivestock) return true;
   return LIVE_ANIMAL_RE.test(title) && !NON_ANIMAL_RE.test(title);
 }
 
@@ -17,6 +31,7 @@ export function getPackBadgeTotal(
   variant: string | null,
   quantity: number,
   title: string,
+  isLivestock = false,
 ): number {
   // Named pack variants — always live animals, no title check needed
   if (variant) {
@@ -28,7 +43,7 @@ export function getPackBadgeTotal(
   }
 
   // All other cases: only apply to live animals (every live animal gets extras)
-  if (!isLiveAnimal(title)) return quantity;
+  if (!isLiveAnimal(title, isLivestock)) return quantity;
 
   // Numeric variant → pack size × quantity
   if (variant) {
@@ -50,6 +65,7 @@ export function getPackBadge(
   variant: string | null,
   quantity: number,
   title: string,
+  isLivestock = false,
 ): { text: string; bg: string } | null {
   // Named pack variants — always live animals, no title check needed
   if (variant) {
@@ -67,7 +83,7 @@ export function getPackBadge(
   }
 
   // All other cases: only apply to live animals (every live animal gets extras)
-  if (!isLiveAnimal(title)) return null;
+  if (!isLiveAnimal(title, isLivestock)) return null;
 
   // Numeric variant → pack size × quantity
   if (variant) {

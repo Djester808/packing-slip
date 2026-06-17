@@ -3,7 +3,7 @@ import { getTempRange, addBusinessDays, toDateString, nextShipDate } from "./wea
 import { getTransitDays } from "./transit.server";
 import { getAlert } from "./alert";
 import { checkIsAccessPoint } from "./ups.server";
-import { getPackBadgeTotal } from "./pack-badge";
+import { getPackBadgeTotal, isLivestockCollection } from "./pack-badge";
 
 export function isLocalShipping(method: string) {
   return /local|pickup|pick.?up/i.test(method) ||
@@ -16,9 +16,16 @@ const ORDER_FIELDS = `
   shippingAddress { firstName lastName company address1 address2 city province zip country }
   shippingLine { title }
   lineItems(first: 40) {
-    edges { node { title quantity currentQuantity variant { title sku image { url } product { featuredImage { url } } } } }
+    edges { node { title quantity currentQuantity
+      product { collections(first: 25) { edges { node { handle title } } } }
+      variant { title sku image { url } product { featuredImage { url } } } } }
   }
 `;
+
+// Collections (handle + title) for a line item's product.
+function lineItemCollections(node: any): Array<{ handle?: string | null; title?: string | null }> {
+  return (node.product?.collections?.edges ?? []).map((e: any) => e.node);
+}
 
 async function buildSlipFromOrder(
   o: any,
@@ -101,6 +108,7 @@ async function buildSlipFromOrder(
           variant: e.node.variant?.title && e.node.variant.title !== "Default Title" ? e.node.variant.title : null,
           imageUrl: e.node.variant?.image?.url ?? e.node.variant?.product?.featuredImage?.url ?? null,
           quantity: e.node.currentQuantity ?? e.node.quantity,
+          isFish: isLivestockCollection(lineItemCollections(e.node)),
         }))
         .reduce((acc: any[], item: any) => {
           const existing = acc.find((i) => i.title === item.title && i.variant === item.variant);
@@ -115,7 +123,7 @@ async function buildSlipFromOrder(
     shipDate: shipDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
     weather: isLocal ? null : {
       deliveryDate: deliveryDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }),
-      transitDays, forecastOutOfRange,
+      transitDays, forecastOutOfRange, maxTempF, minTempF,
       crossesWeekend: (() => {
         const daysToFriday = 5 - shipDate.getDay();
         const friday = new Date(shipDate);
@@ -198,7 +206,7 @@ export async function getInventoryTotals(): Promise<Array<{ title: string; quant
         if (qty <= 0) continue;
 
         const variant = item.variant?.title && item.variant.title !== "Default Title" ? item.variant.title : null;
-        const total = getPackBadgeTotal(variant, qty, item.title);
+        const total = getPackBadgeTotal(variant, qty, item.title, isLivestockCollection(lineItemCollections(item)));
         const variantKey = variant || "(no variant)";
 
         if (itemMap.has(item.title)) {

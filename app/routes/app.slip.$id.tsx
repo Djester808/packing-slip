@@ -7,7 +7,7 @@ import { getShopMeta } from "../shop.server";
 import { getTempRange, addBusinessDays, toDateString, nextShipDate } from "../weather.server";
 import { getTransitDays } from "../transit.server";
 import { getAlert } from "../alert";
-import { getPackBadge } from "../pack-badge";
+import { getPackBadge, isLivestockCollection } from "../pack-badge";
 import prisma from "../db.server";
 
 function isLocalShipping(method: string) {
@@ -36,7 +36,9 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
           }
           shippingLine { title }
           lineItems(first: 50) {
-            edges { node { title quantity currentQuantity variant { title sku image { url } product { featuredImage { url } } } } }
+            edges { node { title quantity currentQuantity
+              product { collections(first: 25) { edges { node { handle title } } } }
+              variant { title sku image { url } product { featuredImage { url } } } } }
           }
           totalPriceSet { presentmentMoney { amount currencyCode } }
           subtotalPriceSet { presentmentMoney { amount currencyCode } }
@@ -121,6 +123,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       variant: e.node.variant?.title && e.node.variant.title !== "Default Title" ? e.node.variant.title : null,
       imageUrl: e.node.variant?.image?.url ?? e.node.variant?.product?.featuredImage?.url ?? null,
       quantity: e.node.currentQuantity ?? e.node.quantity,
+      isFish: isLivestockCollection((e.node.product?.collections?.edges ?? []).map((c: any) => c.node)),
     }))
     .reduce((acc: any[], item: any) => {
       const existing = acc.find((i) => i.title === item.title && i.variant === item.variant);
@@ -201,6 +204,8 @@ export default function PackingSlip() {
   const navigate = useNavigate();
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading" && navigation.location?.pathname.startsWith("/app/slip");
+  // A rolled-over or "do not ship" order shows ONLY that banner — suppress the rest.
+  const doNotShip = rolled || weather?.crossesWeekend === true;
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const toggleCheck = (i: number) => setChecked((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
 
@@ -277,13 +282,13 @@ export default function PackingSlip() {
           </div>
         )}
 
-        {order.isReship && (
+        {!doNotShip && order.isReship && (
           <div className="slip-banner" style={{ background: "#5c007a", borderRadius: "6px", padding: "8px 14px", marginBottom: "14px" }}>
             <span style={{ fontSize: "12px", fontWeight: 800, color: "#fff", letterSpacing: "0.06em" }}>🔄 RESHIP — Verify original order before packing</span>
           </div>
         )}
 
-        {weather?.crossesWeekend && (
+        {!rolled && weather?.crossesWeekend && (
           <div className="slip-banner slip-banner--strong" style={{ background: "#ffd7d5", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>🚫 DO NOT SHIP — ARRIVES NEXT WEEK</div>
             <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
@@ -292,7 +297,7 @@ export default function PackingSlip() {
           </div>
         )}
 
-        {otherOrders.length > 0 && (
+        {!doNotShip && otherOrders.length > 0 && (
           <div className="slip-banner" style={{ background: "#fff0f0", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>
               ⚠️ {otherOrders.length} other unfulfilled order{otherOrders.length !== 1 ? "s" : ""} from this customer
@@ -303,13 +308,13 @@ export default function PackingSlip() {
           </div>
         )}
 
-        {order.isLocal && (
+        {!doNotShip && order.isLocal && (
           <div className="slip-banner" style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#7d4e00" }}>📦 LOCAL ORDER — no weather check needed</div>
           </div>
         )}
 
-        {weather && alert && (
+        {!doNotShip && weather && alert && (
           <div className={`slip-banner ${alert.level === "danger" ? "slip-banner--strong" : ""}`} style={{ background: alert.bg, border: `1px solid ${alert.color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: alert.color }}>
               {ALERT_ICON[alert.level]} {alert.headline}
@@ -427,7 +432,7 @@ export default function PackingSlip() {
                 <td style={{ padding: "10px 12px", borderBottom: "1px solid #f0f0f0", textAlign: "right", fontWeight: 600, verticalAlign: "middle" }}>
                   {item.quantity}
                   {(() => {
-                    const badge = getPackBadge(item.variant, item.quantity, item.title);
+                    const badge = getPackBadge(item.variant, item.quantity, item.title, item.isFish);
                     if (!badge) return null;
                     return (
                       <div style={{ marginTop: "4px", display: "flex", justifyContent: "flex-end" }}>

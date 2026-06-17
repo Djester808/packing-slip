@@ -82,7 +82,7 @@ function ItemsTable({ items }: { items: any[] }) {
             <td style={{ padding: "10px 12px", borderBottom: "1px solid #f0f0f0", textAlign: "right", fontWeight: 600, verticalAlign: "middle" }}>
               {item.quantity}
               {(() => {
-                const badge = getPackBadge(item.variant, item.quantity, item.title);
+                const badge = getPackBadge(item.variant, item.quantity, item.title, item.isFish);
                 if (!badge) return null;
                 return (
                   <div style={{ marginTop: "4px", display: "flex", justifyContent: "flex-end" }}>
@@ -126,6 +126,9 @@ function Signature({ note }: { note: string | null }) {
 
 function SlipView({ slip, shopLogoUrl, shopName, rolled }: { slip: any; shopLogoUrl: string | null; shopName: string | null; rolled: boolean }) {
   const { order, weather, alert, shipDate } = slip;
+  // A rolled-over or "do not ship" order shows ONLY that banner — everything else
+  // (reship, access point, local, weather alert) is suppressed so it can't be missed.
+  const doNotShip = rolled || weather?.crossesWeekend === true;
   const allItems: any[] = order.lineItems;
 
   const page1Items = allItems.slice(0, ITEMS_PAGE_1);
@@ -150,13 +153,13 @@ function SlipView({ slip, shopLogoUrl, shopName, rolled }: { slip: any; shopLogo
           </div>
         )}
 
-        {order.isReship && (
+        {!doNotShip && order.isReship && (
           <div className="slip-banner" style={{ background: "#5c007a", borderRadius: "6px", padding: "8px 14px", marginBottom: "14px" }}>
             <span style={{ fontSize: "12px", fontWeight: 800, color: "#fff", letterSpacing: "0.06em" }}>🔄 RESHIP — Verify original order before packing</span>
           </div>
         )}
 
-        {order.isAccessPoint && (
+        {!doNotShip && order.isAccessPoint && (
           <div className="slip-banner" style={{ background: "#0d3880", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 800, color: "#fff", letterSpacing: "0.04em" }}>📦 UPS ACCESS POINT DELIVERY</div>
             <div style={{ fontSize: "11px", color: "#c8d8f8", marginTop: "3px" }}>
@@ -165,7 +168,7 @@ function SlipView({ slip, shopLogoUrl, shopName, rolled }: { slip: any; shopLogo
           </div>
         )}
 
-        {weather?.crossesWeekend && (
+        {!rolled && weather?.crossesWeekend && (
           <div className="slip-banner slip-banner--strong" style={{ background: "#ffd7d5", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>🚫 DO NOT SHIP — ARRIVES NEXT WEEK</div>
             <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
@@ -174,13 +177,13 @@ function SlipView({ slip, shopLogoUrl, shopName, rolled }: { slip: any; shopLogo
           </div>
         )}
 
-        {order.isLocal && (
+        {!doNotShip && order.isLocal && (
           <div className="slip-banner" style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#7d4e00" }}>📦 LOCAL ORDER — no weather check needed</div>
           </div>
         )}
 
-        {weather && alert && (
+        {!doNotShip && weather && alert && (
           <div className={`slip-banner ${alert.level === "danger" ? "slip-banner--strong" : ""}`} style={{ background: alert.bg, border: `1px solid ${alert.color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: alert.color }}>
               {ALERT_ICON[alert.level]} {alert.headline}

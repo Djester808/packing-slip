@@ -1,0 +1,882 @@
+{% assign delivery_method_types = delivery_agreements | map: 'delivery_method_type' | uniq %}
+{% if delivery_method_types.size > 1 %}
+  {% assign has_split_cart = true %}
+{% else %}
+  {% assign has_split_cart = false %}
+{% endif %}
+
+{% capture email_title %}
+  {% if has_pending_payment %}
+    Thank you for your order!
+  {% else %}
+    Thank you for your purchase!
+  {% endif %}
+{% endcapture %}
+
+{% comment %} ── Corrected Ship Date Calculation ──
+Matches the app's nextShipDate() logic:
+- Mon/Tue before 1 PM CT → ship today
+- Mon after 1 PM CT → ship Tue
+- Tue after 1 PM CT → ship Wed (restricted)
+- Wed-Sun → ship next week's Mon
+{% endcomment %}
+
+{% assign order_dow  = order.created_at | date: "%u" %}
+{% assign order_hour = order.created_at | date: "%H" | plus: 0 %}
+{% assign seconds_per_day = 86400 %}
+
+{% comment %} Federal holidays (keep in sync with app) {% endcomment %}
+{% assign holidays = "2026-01-01,2026-01-19,2026-02-16,2026-05-25,2026-07-03,2026-09-07,2026-10-12,2026-11-11,2026-11-26,2026-12-25,2027-01-01,2027-01-18,2027-02-15,2027-05-31,2027-07-05,2027-09-06,2027-10-11,2027-11-11,2027-11-25,2027-12-24,2027-12-31" %}
+
+{% assign order_ymd = order.created_at | date: "%Y-%m-%d" %}
+{% assign ship_ymd = order_ymd %}
+{% assign days_to_add = 0 %}
+{% assign is_wednesday_only = false %}
+
+{% comment %} Mon or Tue before 1 PM → ship today {% endcomment %}
+{% if order_dow == "1" or order_dow == "2" %}
+  {% if order_hour < 13 %}
+    {% assign ship_ymd = order_ymd %}
+  {% else %}
+    {% if order_dow == "1" %}
+      {% assign days_to_add = 1 %}
+    {% elsif order_dow == "2" %}
+      {% assign days_to_add = 1 %}
+      {% assign is_wednesday_only = true %}
+    {% endif %}
+  {% endif %}
+{% else %}
+  {% comment %} Wed-Sun → next week's Monday {% endcomment %}
+  {% assign days_until_mon = 1 %}
+  {% if order_dow == "3" %}{% assign days_until_mon = 5 %}
+  {% elsif order_dow == "4" %}{% assign days_until_mon = 4 %}
+  {% elsif order_dow == "5" %}{% assign days_until_mon = 3 %}
+  {% elsif order_dow == "6" %}{% assign days_until_mon = 2 %}
+  {% elsif order_dow == "7" %}{% assign days_until_mon = 1 %}
+  {% endif %}
+  {% assign days_to_add = days_until_mon %}
+{% endif %}
+
+{% comment %} Calculate final ship date and skip holidays {% endcomment %}
+{% assign ship_seconds = order_ymd | append: " 12:00:00" | date: "%s" | plus: 0 %}
+{% assign days_offset = days_to_add | times: seconds_per_day %}
+{% assign ship_seconds = ship_seconds | plus: days_offset %}
+{% for i in (1..3) %}
+  {% assign test_ymd = ship_seconds | date: "%Y-%m-%d" %}
+  {% if holidays contains test_ymd %}
+    {% assign ship_seconds = ship_seconds | plus: seconds_per_day %}
+  {% endif %}
+{% endfor %}
+
+{% assign ship_date = ship_seconds | date: "%A, %B %d, %Y" %}
+
+{% capture email_body %}
+  {% if has_pending_payment %}
+    {% if buyer_action_required %}
+      You'll get a confirmation email after completing your payment.
+    {% else %}
+      Your payment is being processed. You'll get an email when your order is confirmed.
+    {% endif %}
+  {% else %}
+    {% if requires_shipping %}
+      {% case delivery_method %}
+        {% when 'pick-up' %}
+          You'll receive an email when your order is ready for pickup.
+        {% when 'local' %}
+          Hi {{ customer.first_name }}, we're getting your order ready for delivery. By placing an order, the buyer acknowledges that they have read, understood, and agreed
+to this Shipping & Live Arrival Guarantee policy in full. We ship Monday through Wednesday.
+        {% else %}
+          We're getting your order ready to be shipped. We will notify you when it has been sent. By placing an order, the buyer acknowledges that they have read, understood, and agreed
+to this Shipping & Live Arrival Guarantee policy in full.
+      {% endcase %}
+      {% if delivery_instructions != blank %}
+        <p><b>Delivery information:</b> {{ delivery_instructions }}</p>
+      {% endif %}
+      {% if consolidated_estimated_delivery_time %}
+        {% if has_multiple_delivery_methods %}
+          <h3 class="estimated_delivery__title">Estimated delivery</h3>
+          <p>{{ consolidated_estimated_delivery_time }}</p>
+        {% else %}
+          <p>Estimated delivery <b>{{ consolidated_estimated_delivery_time }}</b></p>
+        {% endif %}
+      {% endif %}
+    {% endif %}
+  {% endif %}
+  {% assign gift_card_line_items = line_items | where: "gift_card" %}
+  {% assign found_gift_card_with_recipient_email = false %}
+  {% for line_item in gift_card_line_items %}
+    {% if line_item.properties["__shopify_send_gift_card_to_recipient"] and line_item.properties["Recipient email"] %}
+      {% assign found_gift_card_with_recipient_email = true %}
+      {% break %}
+    {% endif %}
+  {% endfor %}
+  {% if found_gift_card_with_recipient_email %}
+    <p>Your gift card recipient will receive an email with their gift card code.</p>
+  {% elsif gift_card_line_items.first %}
+    <p>You'll receive separate emails for any gift cards.</p>
+  {% endif %}
+{% endcapture %}
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+  <title>{{ email_title }}</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width">
+  <link rel="stylesheet" type="text/css" href="/assets/notifications/styles.css">
+  <style>
+    .button__cell { background: {{ shop.email_accent_color }}; }
+    a, a:hover, a:active, a:visited { color: {{ shop.email_accent_color }}; }
+
+    /* ── Ship date banner ── */
+    .ship-date-banner {
+      background: #0d3b1e;
+      border-left: 4px solid #27ae60;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 15px;
+      color: #d4f5e2;
+    }
+    .ship-date-banner strong { color: #ffffff; }
+    .ship-date-banner .ship-date-highlight {
+      font-size: 17px;
+      font-weight: bold;
+      color: #2ecc71;
+      display: block;
+      margin-top: 4px;
+    }
+
+    /* ── Local pickup banner ── */
+    .pickup-banner {
+      background: #F40909;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 14px;
+      color: #ffffff;
+    }
+    .pickup-banner strong { color: #ffffff; }
+    .pickup-banner a { color: #ffffff !important; text-decoration: underline; }
+
+    /* ── Live Guarantee banner ── */
+    .live-guarantee-banner {
+      background: #fff0f0;
+      border-left: 4px solid #F40909;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 14px;
+      color: #7a1010;
+    }
+    .live-guarantee-banner strong { color: #b50707; }
+    .live-guarantee-banner a { color: #F40909 !important; }
+  </style>
+</head>
+
+  <body>
+    <table class="body">
+      <tr>
+        <td>
+          <table class="header row">
+  <tr>
+    <td class="header__cell">
+      <center>
+        <table class="container">
+          <tr>
+            <td>
+              <table class="row">
+                <tr>
+                  <td class="shop-name__cell">
+                    {%- if shop.email_logo_url %}
+                      <img src="{{shop.email_logo_url}}" alt="{{ shop.name }}" width="{{ shop.email_logo_width }}" style="border-radius:12px;">
+                    {%- else %}
+                      <h1 class="shop-name__text">
+                        <a href="{{shop.url}}">{{ shop.name }}</a>
+                      </h1>
+                    {%- endif %}
+                  </td>
+                  <td>
+                    <table class="order-po-number__container">
+                      <tr>
+                        <td class="order-number__cell">
+                          <span class="order-number__text">
+                            Order {{ order_name }}
+                          </span>
+                        </td>
+                      </tr>
+                      {%- if po_number %}
+                        <tr>
+                          <td class="po-number__cell">
+                            <span class="po-number__text">
+                              PO number #{{ po_number }}
+                            </span>
+                          </td>
+                        </tr>
+                      {%- endif %}
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </center>
+    </td>
+  </tr>
+</table>
+
+          <table class="row content">
+  <tr>
+    <td class="content__cell">
+      <center>
+        <table class="container">
+          <tr>
+            <td>
+
+              <h2>{{ email_title }}</h2>
+              <p>{{ email_body }}</p>
+
+              <!-- ── SHIP DATE BANNER (standard shipping only) ── -->
+              {% if requires_shipping %}
+                {% unless delivery_method == 'pick-up' %}
+                  <div class="ship-date-banner">
+                    🚚 <strong>Your order is scheduled to ship on:</strong>
+                    <span class="ship-date-highlight">{{ ship_date }}</span>
+                    {% if is_wednesday_only %}
+                      <span style="display:block;margin-top:6px;color:#f9e04b;">⚠️ Your order was placed after our soft cutoff window, so it is scheduled for <strong style="color:#ffffff;">{{ ship_date }}</strong>. If you need it sooner, reach out to us!</span>
+                    {% endif %}
+                    We ship <strong>Monday through Wednesday</strong>. Live animals and plants ship Monday and Tuesday. Wednesday shipments are limited to dry goods and 2-day or overnight shipping. Orders ship <strong>while supplies last</strong> on a first-in, first-out basis — ordering earlier in the week helps guarantee your spot.
+                    <span style="display:block;margin-top:8px;">📍 <strong style="color:#ffffff;">Extreme temperatures on your delivery day?</strong> On very hot or cold days the biggest risk is your order waiting on the delivery truck. If the forecasted high or low at your address on the expected arrival day is unsafe for livestock, we may hold it until the next safe ship day. To avoid the wait, reply to this email with your nearest <strong style="color:#ffffff;">UPS Access Point</strong> — your package waits indoors at a climate-controlled location instead of on the truck, so we can often ship sooner.</span>
+                    <a href="https://www.superiorshrimpaquatics.com/pages/shipping-info-practices" style="color:#2ecc71;">View our shipping policy →</a>
+                  </div>
+                {% endunless %}
+              {% endif %}
+
+              <!-- ── LOCAL PICKUP BANNER ── -->
+              {% if delivery_method == 'pick-up' %}
+                <div class="pickup-banner" style="background:#F40909;border-radius:8px;padding:12px 16px;margin:16px 0;font-size:14px;color:#ffffff;font-family:Helvetica,Arial,sans-serif;line-height:1.6;">
+                  🏪 <strong style="color:#ffffff;">Local Pickup Selected!</strong> We'll email you when your order is ready. Best pickup days are <strong style="color:#ffffff;">Sundays 9AM–1PM</strong> — please reach out to us at <a href="mailto:support@superiorshrimpaquatics.com" style="color:#ffffff;text-decoration:underline;">support@superiorshrimpaquatics.com</a> before coming!
+                </div>
+              {% endif %}
+
+              <!-- ── LIVE GUARANTEE BANNER ── -->
+              <div class="live-guarantee-banner">
+                🛡️ <strong>100% Live Arrival Guarantee</strong> — Dead or damaged on arrival? Contact us within <strong>2 hours</strong> with clear photos of unopened bags. <a href="https://www.superiorshrimpaquatics.com/pages/doa-policy">View our 100% Live Guarantee policy →</a>
+              </div>
+
+              {% assign transaction_count = transactions | size %}
+  {% if transaction_count > 0 %}
+    {% for transaction in transactions %}
+      {% if transaction.show_buyer_pending_payment_instructions? %}
+        <p> {{transaction.buyer_pending_payment_notice}} </p>
+        <p>
+        <table class="row">
+          <tr>
+            {% for instruction in transaction.buyer_pending_payment_instructions %}
+              <td>{{ instruction.header }}</td>
+            {% endfor %}
+            <td>Amount</td>
+          </tr>
+          <tr>
+            {% for instruction in transaction.buyer_pending_payment_instructions %}
+              <td>{{ instruction.value }}</td>
+            {% endfor %}
+            <td>{{transaction.amount | money}}</td>
+          </tr>
+        </table>
+        </p>
+      {% endif %}
+    {% endfor%}
+  {% endif %}
+
+              {% if order_status_url %}
+                <table class="row actions">
+  <tr>
+    <td class="empty-line">&nbsp;</td>
+  </tr>
+  <tr>
+    <td class="actions__cell">
+      <table class="button main-action-cell">
+        <tr>
+          <td class="button__cell"><a href="{{ order_status_url }}" class="button__text">View your order</a></td>
+        </tr>
+      </table>
+      {% if shop.url %}
+        <table class="link secondary-action-cell">
+          <tr>
+            <td class="link__cell">or <a href="{{ shop.url }}">Visit our store</a></td>
+          </tr>
+        </table>
+      {% endif %}
+    </td>
+  </tr>
+</table>
+              {% else %}
+                {% if shop.url %}
+                  <table class="row actions">
+                    <tr>
+                      <td class="actions__cell">
+                        <table class="button main-action-cell">
+                          <tr>
+                            <td class="button__cell"><a href="{{ shop.url }}" class="button__text">Visit our store</a></td>
+                          </tr>
+                        </table>
+                      </td>
+                    </tr>
+                  </table>
+                {% endif %}
+              {% endif %}
+
+            </td>
+          </tr>
+        </table>
+      </center>
+    </td>
+  </tr>
+</table>
+
+          <table class="row section">
+  <tr>
+    <td class="section__cell">
+      <center>
+        <table class="container">
+          <tr>
+            <td>
+              <h3>Order summary</h3>
+            </td>
+          </tr>
+        </table>
+        <table class="container">
+          <tr>
+            <td>
+
+            {% if has_split_cart %}
+
+<table class="row">
+  {% for line in subtotal_line_items %}
+    {% unless line.delivery_agreement %}
+        {% if line.groups.size == 0 %}
+          {% assign legacy_separator = true %}
+
+{% comment %} Skip child add-ons since they will be rendered under the parent line item {% endcomment %}
+{% unless line.nested_line_child? %}
+
+  {% assign is_parent = false %}
+  {% assign is_nested_line_parent = line.nested_line_parent? %}
+  {% if line.bundle_parent? or line.nested_line_parent? %}
+    {% assign is_parent = true %}
+  {% endif %}
+  {% if is_nested_line_parent %}
+    {% assign css_order_list_cell_nested_line_parent_class = 'order-list__parent-cell' %}
+    {% assign css_order_list_parent_image_cell_nested_line_parent_class = 'order-list__nested-parent-image-cell' %}
+  {% endif %}
+
+  <tr class="order-list__item">
+    <td class="order-list__item__cell {{ css_order_list_cell_nested_line_parent_class }}">
+      <table height="100%">
+        <td style="padding-bottom: 0px;">
+          <table height="100%">
+            <tr valign="top">
+              {% if false and is_parent %}
+                <td class="order-list__parent-image-cell {{ css_order_list_parent_image_cell_nested_line_parent_class }}">
+                  {% if line.image %}
+                    <img src="{{ line | img_url: 'compact_cropped' }}" align="left" width="60" height="60" class="order-list__product-image"/>
+                  {% else %}
+                    <div class="order-list__no-image-cell">
+                      <img src="{{ 'notifications/no-image.png' | shopify_asset_url }}" align="left" class="order-list__no-product-image"/>
+                    </div>
+                  {% endif %}
+                </td>
+              {% else %}
+                <td class="order-list__image-cell">
+                  {% if line.image %}
+                    <img src="{{ line | img_url: 'compact_cropped' }}" align="left" width="60" height="60" class="order-list__product-image"/>
+                  {% else %}
+                    <div class="order-list__no-image-cell">
+                      <img src="{{ 'notifications/no-image.png' | shopify_asset_url }}" align="left" width="60" height="60" class="order-list__no-product-image"/>
+                    </div>
+                  {% endif %}
+                </td>
+              {% endif %}
+            </tr>
+          </table>
+        </td>
+
+        <td class="order-list__product-description-cell">
+          {% if line.presentment_title %}
+            {% assign line_title = line.presentment_title %}
+          {% elsif line.title %}
+            {% assign line_title = line.title %}
+          {% else %}
+            {% assign line_title = line.product.title %}
+          {% endif %}
+          {% if line.quantity < line.quantity %}
+            {% capture line_display %}
+              {{ line.quantity }} of {{ line.quantity }}
+            {% endcapture %}
+          {% else %}
+            {% assign line_display = line.quantity %}
+          {% endif %}
+
+          <span class="order-list__item-title">{{ line_title }}&nbsp;&times;&nbsp;{{ line_display }}</span><br/>
+
+          {% if line.variant.title != 'Default Title' and is_parent == false %}
+            <span class="order-list__item-variant">{{ line.variant.title }}</span><br/>
+          {% elsif line.variant.title != 'Default Title' and line.nested_line_parent? %}
+            <span class="order-list__item-variant">{{ line.variant.title }}</span><br/>
+          {% elsif line.variant.title != 'Default Title' and line.bundle_parent? and false == false %}
+            <span class="order-list__item-variant">{{ line.variant.title }}</span><br/>
+          {% endif %}
+
+          {% if line.gift_card and line.properties["__shopify_send_gift_card_to_recipient"] %}
+            {% for property in line.properties %}
+  {% assign property_first_char = property.first | slice: 0 %}
+  {% if property.last != blank and property_first_char != '_' %}
+    <div class="order-list__item-property">
+      <dt>{{ property.first }}:</dt>
+      <dd>
+      {% if property.last contains '/uploads/' %}
+        <a href="{{ property.last }}" class="link" target="_blank">
+        {{ property.last | split: '/' | last }}
+        </a>
+      {% else %}
+        {{ property.last }}
+      {% endif %}
+      </dd>
+    </div>
+  {% endif %}
+{% endfor %}
+          {% endif %}
+
+          {% if line.selling_plan_allocation %}
+            <span class="order-list__item-variant">{{ line.selling_plan_allocation.selling_plan.name }}</span><br/>
+          {% endif %}
+
+          {% if line.refunded_quantity > 0 %}
+            <span class="order-list__item-refunded">Refunded</span>
+          {% endif %}
+
+          {% if line.discount_allocations %}
+            {% for discount_allocation in line.discount_allocations %}
+              {% if discount_allocation.discount_application.target_selection != 'all' %}
+              <p>
+                <span class="order-list__item-discount-allocation">
+                  <img src="{{ 'notifications/discounttag.png' | shopify_asset_url }}" width="18" height="18" class="discount-tag-icon" />
+                  <span>
+                    {{ discount_allocation.discount_application.title | upcase }}
+                    (-{{ discount_allocation.amount | money }})
+                  </span>
+                </span>
+              </p>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </td>
+          {% if false and is_parent %}
+            <td class="order-list__parent-price-cell">
+          {% else %}
+            <td class="order-list__price-cell">
+          {% endif %}
+          {% if line.original_line_price != line.final_line_price %}
+            <del class="order-list__item-original-price">{{ line.original_line_price | money }}</del>
+          {% endif %}
+            <p class="order-list__item-price">
+              {% if line.final_line_price > 0 %}
+                {{ line.final_line_price | money }}
+              {% else %}
+                Free
+              {% endif %}
+            </p>
+          </td>
+      </table>
+    </td>
+  </tr>
+
+{% endunless %}
+
+        {% endif %}
+    {% endunless %}
+  {% endfor %}
+</table>
+
+{% if legacy_separator %}
+  <hr class="order-list__delivery-method-type-separator">
+{% endif %}
+
+{% for delivery_agreement in delivery_agreements %}
+  {% if delivery_agreement.line_items != blank %}
+    {% if delivery_agreements.size > 1 %}
+      <h4 class="order-list__delivery-method-type">
+        {{ delivery_agreement.delivery_method_name }}  items
+      </h4>
+    {% endif %}
+    <table class="row">
+      {% for line in delivery_agreement.non_parent_line_items %}
+          {% if line.groups.size == 0 %}
+            {% unless line.nested_line_child? %}
+  <tr class="order-list__item">
+    <td class="order-list__item__cell">
+      <table height="100%">
+        <td style="padding-bottom: 0px;">
+          <table height="100%">
+            <tr valign="top">
+              <td class="order-list__image-cell">
+                {% if line.image %}
+                  <img src="{{ line | img_url: 'compact_cropped' }}" align="left" width="60" height="60" class="order-list__product-image"/>
+                {% else %}
+                  <div class="order-list__no-image-cell">
+                    <img src="{{ 'notifications/no-image.png' | shopify_asset_url }}" align="left" width="60" height="60" class="order-list__no-product-image"/>
+                  </div>
+                {% endif %}
+              </td>
+            </tr>
+          </table>
+        </td>
+        <td class="order-list__product-description-cell">
+          {% if line.presentment_title %}{% assign line_title = line.presentment_title %}
+          {% elsif line.title %}{% assign line_title = line.title %}
+          {% else %}{% assign line_title = line.product.title %}{% endif %}
+          {% assign line_display = line.quantity %}
+          <span class="order-list__item-title">{{ line_title }}&nbsp;&times;&nbsp;{{ line_display }}</span><br/>
+          {% if line.variant.title != 'Default Title' %}<span class="order-list__item-variant">{{ line.variant.title }}</span><br/>{% endif %}
+          {% if line.refunded_quantity > 0 %}<span class="order-list__item-refunded">Refunded</span>{% endif %}
+          {% if line.discount_allocations %}
+            {% for discount_allocation in line.discount_allocations %}
+              {% if discount_allocation.discount_application.target_selection != 'all' %}
+              <p><span class="order-list__item-discount-allocation">
+                <img src="{{ 'notifications/discounttag.png' | shopify_asset_url }}" width="18" height="18" class="discount-tag-icon" />
+                <span>{{ discount_allocation.discount_application.title | upcase }} (-{{ discount_allocation.amount | money }})</span>
+              </span></p>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </td>
+        <td class="order-list__price-cell">
+          {% if line.original_line_price != line.final_line_price %}
+            <del class="order-list__item-original-price">{{ line.original_line_price | money }}</del>
+          {% endif %}
+          <p class="order-list__item-price">
+            {% if line.final_line_price > 0 %}{{ line.final_line_price | money }}{% else %}Free{% endif %}
+          </p>
+        </td>
+      </table>
+    </td>
+  </tr>
+{% endunless %}
+          {% endif %}
+      {% endfor %}
+    </table>
+    {% unless forloop.last %}<hr class="order-list__delivery-method-type-separator">{% endunless %}
+  {% endif %}
+{% endfor %}
+
+            {% else %}
+
+<table class="row">
+  {% for line in subtotal_line_items %}
+    {% if line.groups.size == 0 %}
+      {% unless line.nested_line_child? %}
+  <tr class="order-list__item">
+    <td class="order-list__item__cell">
+      <table height="100%">
+        <td style="padding-bottom: 0px;">
+          <table height="100%">
+            <tr valign="top">
+              <td class="order-list__image-cell">
+                {% if line.image %}
+                  <img src="{{ line | img_url: 'compact_cropped' }}" align="left" width="60" height="60" class="order-list__product-image"/>
+                {% else %}
+                  <div class="order-list__no-image-cell">
+                    <img src="{{ 'notifications/no-image.png' | shopify_asset_url }}" align="left" width="60" height="60" class="order-list__no-product-image"/>
+                  </div>
+                {% endif %}
+              </td>
+            </tr>
+          </table>
+        </td>
+        <td class="order-list__product-description-cell">
+          {% if line.presentment_title %}{% assign line_title = line.presentment_title %}
+          {% elsif line.title %}{% assign line_title = line.title %}
+          {% else %}{% assign line_title = line.product.title %}{% endif %}
+          {% assign line_display = line.quantity %}
+          <span class="order-list__item-title">{{ line_title }}&nbsp;&times;&nbsp;{{ line_display }}</span><br/>
+          {% if line.variant.title != 'Default Title' %}<span class="order-list__item-variant">{{ line.variant.title }}</span><br/>{% endif %}
+          {% if line.gift_card and line.properties["__shopify_send_gift_card_to_recipient"] %}
+            {% for property in line.properties %}
+              {% assign property_first_char = property.first | slice: 0 %}
+              {% if property.last != blank and property_first_char != '_' %}
+                <div class="order-list__item-property">
+                  <dt>{{ property.first }}:</dt>
+                  <dd>{% if property.last contains '/uploads/' %}<a href="{{ property.last }}" class="link" target="_blank">{{ property.last | split: '/' | last }}</a>{% else %}{{ property.last }}{% endif %}</dd>
+                </div>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+          {% if line.selling_plan_allocation %}<span class="order-list__item-variant">{{ line.selling_plan_allocation.selling_plan.name }}</span><br/>{% endif %}
+          {% if line.refunded_quantity > 0 %}<span class="order-list__item-refunded">Refunded</span>{% endif %}
+          {% if line.discount_allocations %}
+            {% for discount_allocation in line.discount_allocations %}
+              {% if discount_allocation.discount_application.target_selection != 'all' %}
+              <p><span class="order-list__item-discount-allocation">
+                <img src="{{ 'notifications/discounttag.png' | shopify_asset_url }}" width="18" height="18" class="discount-tag-icon" />
+                <span>{{ discount_allocation.discount_application.title | upcase }} (-{{ discount_allocation.amount | money }})</span>
+              </span></p>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </td>
+        <td class="order-list__price-cell">
+          {% if line.original_line_price != line.final_line_price %}
+            <del class="order-list__item-original-price">{{ line.original_line_price | money }}</del>
+          {% endif %}
+          <p class="order-list__item-price">
+            {% if line.final_line_price > 0 %}{{ line.final_line_price | money }}{% if line.unit_price_measurement %}<div class="order-list__unit-price">{{- line.unit_price | unit_price_with_measurement: line.unit_price_measurement -}}</div>{% endif %}{% else %}Free{% endif %}
+          </p>
+        </td>
+      </table>
+    </td>
+  </tr>
+{% endunless %}
+    {% endif %}
+  {% endfor %}
+</table>
+
+            {% endif %}
+
+            <table class="row subtotal-lines">
+  <tr>
+    <td class="subtotal-spacer"></td>
+    <td>
+      <table class="row subtotal-table">
+        {% assign total_order_discount_amount = 0 %}
+        {% assign has_shipping_discount = false %}
+        {% assign epsilon = 0.00001 %}
+        {% for discount_application in discount_applications %}
+          {% if discount_application.target_selection == 'all' and discount_application.target_type == 'line_item' %}
+            {% assign order_discount_count = order_discount_count | plus: 1 %}
+            {% assign total_order_discount_amount = total_order_discount_amount | plus: discount_application.total_allocated_amount %}
+          {% endif %}
+          {% if discount_application.target_type == 'shipping_line' %}
+            {% assign has_shipping_discount = true %}
+            {% assign shipping_discount_title = discount_application.title %}
+            {% assign discount_value_price = discount_application.total_allocated_amount %}
+            {% assign shipping_amount_minus_discount_value_price = shipping_price | minus: discount_value_price %}
+            {% assign shipping_amount_minus_discount_value_price_abs = shipping_amount_minus_discount_value_price | abs %}
+            {% assign discount_application_value_type = discount_application.value_type | strip %}
+            {% if shipping_amount_minus_discount_value_price_abs < epsilon or discount_application_value_type == 'percentage' and discount_application.value == 100 %}
+              {% assign free_shipping = true %}
+            {% else %}
+              {% assign discounted_shipping_price = shipping_amount_minus_discount_value_price %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+
+<tr class="subtotal-line">
+  <td class="subtotal-line__title"><p><span>Subtotal</span></p></td>
+  <td class="subtotal-line__value"><strong>{{ subtotal_price | plus: total_order_discount_amount | money }}</strong></td>
+</tr>
+
+        {% if order_discount_count > 0 %}
+          <tr class="subtotal-line">
+            <td class="subtotal-line__title"><p><span>Order discount{{ order_discount_count | pluralize: '', 's' }}</span></p></td>
+            <td class="subtotal-line__value"><strong>-{{ total_order_discount_amount | money }}</strong></td>
+          </tr>
+          {% for discount_application in discount_applications %}
+            {% if discount_application.target_selection == 'all' and discount_application.target_type != 'shipping_line' %}
+              <tr class="subtotal-line">
+                <td class="subtotal-line__title"><p><span class="subtotal-line__discount">
+                  <img src="{{ 'notifications/discounttag.png' | shopify_asset_url }}" width="18" height="18" class="discount-tag-icon" />
+                  <span class="subtotal-line__discount-title">{{ discount_application.title }} (-{{ discount_application.total_allocated_amount | money }})</span>
+                </span></p></td>
+              </tr>
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+
+        {% unless retail_delivery_only %}
+          {% if delivery_method == 'pick-up' %}
+            <tr class="subtotal-line">
+              <td class="subtotal-line__title"><p><span>Pickup</span></p></td>
+              <td class="subtotal-line__value"><strong>{{ shipping_price | money }}</strong></td>
+            </tr>
+          {% else %}
+            {% if has_shipping_discount %}
+              {% if free_shipping == true %}
+                <tr class="subtotal-line">
+                  <td class="subtotal-line__title"><p><span>Shipping</span></p></td>
+                  <td class="subtotal-line__value"><del>{% if shipping_price != 0 %}{{ shipping_price | money }}{% endif %}</del> <strong>Free</strong></td>
+                </tr>
+              {% else %}
+                <tr class="subtotal-line">
+                  <td class="subtotal-line__title"><p><span>Shipping</span></p></td>
+                  <td class="subtotal-line__value"><del>{{ shipping_price | money }}</del> <strong>{{ discounted_shipping_price | money }}</strong></td>
+                </tr>
+              {% endif %}
+              <tr class="subtotal-line">
+                <td class="subtotal-line__title"><p><span class="subtotal-line__discount">
+                  <img src="{{ 'notifications/discounttag.png' | shopify_asset_url }}" width="18" height="18" class="discount-tag-icon" />
+                  <span class="subtotal-line__discount-title">{{ shipping_discount_title }} {% if discount_value_price != 0 %}(-{{ discount_value_price | money }}){% endif %}</span>
+                </span></p></td>
+              </tr>
+            {% else %}
+              <tr class="subtotal-line">
+                <td class="subtotal-line__title"><p><span>Shipping</span></p></td>
+                <td class="subtotal-line__value"><strong>{{ shipping_price | money }}</strong></td>
+              </tr>
+            {% endif %}
+          {% endif %}
+        {% endunless %}
+
+        {% if total_duties %}
+          <tr class="subtotal-line">
+            <td class="subtotal-line__title"><p><span>Duties</span></p></td>
+            <td class="subtotal-line__value"><strong>{{ total_duties | money }}</strong></td>
+          </tr>
+        {% endif %}
+
+        <tr class="subtotal-line">
+          <td class="subtotal-line__title"><p><span>Taxes</span></p></td>
+          <td class="subtotal-line__value"><strong>{{ tax_price | money }}</strong></td>
+        </tr>
+
+        {% if total_tip and total_tip > 0 %}
+          <tr class="subtotal-line">
+            <td class="subtotal-line__title"><p><span>Tip</span></p></td>
+            <td class="subtotal-line__value"><strong>{{ total_tip | money }}</strong></td>
+          </tr>
+        {% endif %}
+      </table>
+
+      <table class="row subtotal-table subtotal-table--total">
+        <tr class="subtotal-line">
+          <td class="subtotal-line__title"><p><span>Total</span></p></td>
+          <td class="subtotal-line__value"><strong>{{ total_price | money_with_currency }}</strong></td>
+        </tr>
+        {% if total_discounts > 0 %}
+          <tr class="subtotal-line">
+            <td></td>
+            <td class="subtotal-line__value total-discount">You saved <span class="total-discount--amount">{{ total_discounts | money }}</span></td>
+          </tr>
+        {% endif %}
+      </table>
+    </td>
+  </tr>
+</table>
+
+            </td>
+          </tr>
+        </table>
+      </center>
+    </td>
+  </tr>
+</table>
+
+          <table class="row section">
+  <tr>
+    <td class="section__cell">
+      <center>
+        <table class="container">
+          <tr>
+            <td><h3>Customer information</h3></td>
+          </tr>
+        </table>
+        <table class="container">
+          <tr>
+            <td>
+              <table class="row">
+                <tr>
+                  {% if requires_shipping and shipping_address %}
+                    <td class="customer-info__item">
+                      <h4>Shipping address</h4>
+                      {{ shipping_address | format_address }}
+                    </td>
+                  {% endif %}
+                  {% if billing_address %}
+                    <td class="customer-info__item">
+                      <h4>Billing address</h4>
+                      {{ billing_address | format_address }}
+                    </td>
+                  {% endif %}
+                </tr>
+              </table>
+              <table class="row">
+                <tr>
+                  {% if transactions.size > 0 %}
+                    <td class="customer-info__item">
+                      <h4>Payment</h4>
+                      <p class="customer-info__item-content">
+                        {% for transaction in transactions %}
+                          {% if transaction.status == "success" or transaction.status == "pending" %}
+                            {% if transaction.kind == "capture" or transaction.kind == "sale" %}
+                              {% if transaction.payment_details.credit_card_company %}
+                                <img src="{{ transaction.payment_details.credit_card_company | payment_icon_png_url }}" class="customer-info__item-credit" height="24" alt="{{ transaction.payment_details.credit_card_company }}">
+                                <span>ending with {{ transaction.payment_details.credit_card_last_four_digits }}</span><br>
+                              {% elsif transaction.gateway_display_name == "Gift card" %}
+                                ending with {{ transaction.payment_details.gift_card.last_four_characters | upcase }}<br>
+                              {% elsif transaction.gateway_display_name != "Shop Cash" and transaction.gateway != "shop_offer" %}
+                                {{ transaction.gateway_display_name }}<br>
+                              {% endif %}
+                            {% endif %}
+                          {% endif %}
+                        {% endfor %}
+                      </p>
+                    </td>
+                  {% endif %}
+                </tr>
+                <tr>
+                  {% if requires_shipping and shipping_address %}
+                    {% if shipping_method %}
+                      <td class="customer-info__item">
+                        <h4>Shipping method</h4>
+                        <p>{{ shipping_method.title }}</p>
+                      </td>
+                    {% endif %}
+                  {% endif %}
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </center>
+    </td>
+  </tr>
+</table>
+
+          <table class="row footer">
+  <tr>
+    <td class="footer__cell">
+      <center>
+        <table class="container">
+          <tr>
+            <td>
+              <p class="disclaimer__subtext">If you have any questions, reply to this email or contact us at <a href="mailto:{{ shop.email }}">{{ shop.email }}</a></p>
+              <p class="disclaimer__subtext" style="margin-top: 8px;">
+                <a href="https://www.facebook.com/p/Superior-Shrimp-Aquatics-61553268254349/">Facebook</a> &nbsp;·&nbsp;
+                <a href="https://www.instagram.com/superior_shrimp_aquatics/">Instagram</a> &nbsp;·&nbsp;
+                <a href="https://www.tiktok.com/@superiorshrimp">TikTok</a>
+              </p>
+            </td>
+          </tr>
+        </table>
+      </center>
+    </td>
+  </tr>
+</table>
+
+<img src="{{ 'notifications/spacer.png' | shopify_asset_url }}" class="spacer" height="1" />
+
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
+
+{%- if billing_address.country_code == 'DE' or billing_address.country_code == 'DK' -%}
+  {%- if shop.terms_of_service.body != blank -%}
+    {{ shop.terms_of_service | attach_as_pdf: "Terms of service" }}
+  {%- endif -%}
+  {%- if shop.refund_policy.body != blank -%}
+    {{ shop.refund_policy | attach_as_pdf: "Refund policy" }}
+  {%- endif -%}
+{%- endif -%}

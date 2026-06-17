@@ -78,7 +78,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const firstName = slip.order.customerName?.split(" ")[0] || "there";
         const logoUrl = "https://cdn.shopify.com/s/files/1/0647/8436/1341/files/3D_Logo_700x700.png"; // Store logo URL
         const deliveryDate = slip.weather?.deliveryDate || undefined;
-        const emailSent = await sendWeatherDelayEmail(slip.order.customerEmail, firstName, orderName, logoUrl, deliveryDate);
+        const maxTempF = slip.weather?.maxTempF || undefined;
+        const transitDays = slip.weather?.transitDays || undefined;
+        const emailSent = await sendWeatherDelayEmail(slip.order.customerEmail, firstName, orderName, logoUrl, deliveryDate, maxTempF, transitDays);
         return json({ status: "email_sent", alert: { headline: slip.alert.headline, body: slip.alert.body, level: slip.alert.level }, emailSent });
       }
     }

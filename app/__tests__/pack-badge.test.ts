@@ -1,4 +1,4 @@
-import { getPackBadge } from '../pack-badge';
+import { getPackBadge, isLivestockCollection } from '../pack-badge';
 
 describe('getPackBadge', () => {
   describe('Breeder Pack', () => {
@@ -176,6 +176,30 @@ describe('getPackBadge', () => {
     it('plural "Snails" title behaves the same', () => {
       const result = getPackBadge('25 Pack', 2, 'Assassin Snails');
       expect(result?.text).toBe('= 60 TOTAL'); // 50 + 10 extras, matches Cherry Shrimp test
+    });
+  });
+
+  describe('Fish (detected by collection, not title)', () => {
+    it('isLivestockCollection matches the Freshwater Fish collection by handle or title', () => {
+      expect(isLivestockCollection([{ handle: 'freshwater-fish', title: 'Freshwater Fish' }])).toBe(true);
+      expect(isLivestockCollection([{ handle: 'freshwater-fish' }])).toBe(true);
+      expect(isLivestockCollection([{ title: 'Freshwater Fish' }])).toBe(true);
+      expect(isLivestockCollection([{ handle: 'plants', title: 'Live Plants' }])).toBe(false);
+      expect(isLivestockCollection([])).toBe(false);
+    });
+
+    it('a species-named fish gets the +1/5 extras when flagged livestock', () => {
+      // "Galaxy Rasbora" has no animal keyword in the title — only the collection flag
+      const result = getPackBadge('10 Pack', 3, 'Galaxy Rasbora', true);
+      expect(result?.text).toBe('= 36 TOTAL'); // same as a 10-pack shrimp
+    });
+
+    it('bare-count fish gets +1/5', () => {
+      expect(getPackBadge(null, 10, 'Endler', true)?.text).toBe('= 12 TOTAL');
+    });
+
+    it('without the livestock flag a species-named fish gets no badge', () => {
+      expect(getPackBadge(null, 10, 'Endler', false)).toBeNull();
     });
   });
 

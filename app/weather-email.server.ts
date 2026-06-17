@@ -28,10 +28,14 @@ export async function sendWeatherDelayEmail(
   orderName: string,
   logoUrl?: string,
   deliveryDate?: string,
+  maxTempF?: number | null,
+  transitDays?: number,
 ): Promise<boolean> {
   try {
     const logoHtml = logoUrl ? `<div style="margin-bottom:16px;"><img src="${logoUrl}" alt="Superior Shrimp & Aquatics" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.25);display:block;margin:0 auto;" /></div>` : "";
     const deliveryHtml = deliveryDate ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Estimated Delivery:</strong> ${deliveryDate}</p>` : "";
+    const tempHtml = maxTempF ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Estimated Temp:</strong> ${Math.round(maxTempF)}°F</p>` : "";
+    const speedHtml = transitDays ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Shipping Speed:</strong> ${transitDays} day${transitDays > 1 ? "s" : ""}</p>` : "";
 
     const html = `<!-- Superior Shrimp & Aquatics - Weather Delay Email -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0; padding:0; background-color:#f7f3ee;">
@@ -50,6 +54,8 @@ export async function sendWeatherDelayEmail(
             <p style="font-family:'Playfair Display',Georgia,serif; font-size:22px; font-weight:600; color:#1e1a1a; margin:0 0 18px 0;">Thank you for your order, ${firstName}!</p>
             <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">Currently, the temperatures in your area are above our safety threshold for shipping live animals. We don't want your shipment sitting on a hot truck all day, so to get it out to you this week, we would need to route it to a <strong style="color:#111111;">UPS Access Point</strong> near you for pickup.</p>
             ${deliveryHtml}
+            ${tempHtml}
+            ${speedHtml}
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px 0;">
               <tr>
                 <td style="background-color:#fff0f0; border-left:4px solid #F40909; border-radius:10px; padding:14px 18px;">

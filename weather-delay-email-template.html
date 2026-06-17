@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Order {{order.name}} — Weather Hold</title>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta name="viewport" content="width=device-width">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; background: #f9f9f9; }
+    .email-wrapper { background: #ffffff; max-width: 600px; margin: 0 auto; }
+
+    /* Header with logo */
+    .header { background: #0d3b1e; padding: 30px 20px; text-align: center; border-bottom: 4px solid #27ae60; }
+    .logo { max-width: 180px; height: auto; margin-bottom: 15px; }
+    .order-number { color: #2ecc71; font-size: 14px; font-weight: 600; letter-spacing: 1px; }
+
+    /* Main content */
+    .content { padding: 40px 30px; }
+    .greeting { font-size: 18px; font-weight: 600; color: #0d3b1e; margin-bottom: 15px; }
+    .body-text { color: #555; margin-bottom: 15px; line-height: 1.7; }
+
+    /* Alert banner */
+    .alert-banner {
+      background: #fff0f0;
+      border-left: 5px solid #F40909;
+      padding: 20px;
+      margin: 25px 0;
+      border-radius: 6px;
+      font-size: 15px;
+      color: #7a1010;
+    }
+    .alert-banner strong { color: #b50707; font-weight: 700; }
+    .alert-icon { font-size: 20px; margin-right: 8px; }
+
+    /* Instructions section */
+    .instructions { margin: 30px 0; }
+    .instructions h3 { color: #0d3b1e; font-size: 16px; font-weight: 600; margin-bottom: 15px; }
+    .step { margin-bottom: 12px; padding-left: 25px; position: relative; color: #555; }
+    .step-number {
+      position: absolute;
+      left: 0;
+      top: 0;
+      background: #27ae60;
+      color: white;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    /* UPS Access Point section */
+    .ups-section {
+      background: #f0f9ff;
+      border-left: 5px solid #0066cc;
+      padding: 20px;
+      margin: 25px 0;
+      border-radius: 6px;
+    }
+    .ups-section strong { color: #0066cc; }
+    .ups-link { color: #0066cc; text-decoration: none; font-weight: 600; border-bottom: 1px solid #0066cc; }
+    .ups-link:hover { text-decoration: underline; }
+
+    /* CTA section */
+    .cta-section {
+      background: #0d3b1e;
+      color: #d4f5e2;
+      padding: 25px;
+      border-radius: 6px;
+      margin: 30px 0;
+      text-align: center;
+    }
+    .cta-section strong { color: #2ecc71; }
+    .reply-text { font-size: 14px; margin-top: 12px; }
+
+    /* Footer */
+    .footer {
+      background: #f5f5f5;
+      padding: 30px;
+      text-align: center;
+      font-size: 13px;
+      color: #999;
+      border-top: 1px solid #ddd;
+    }
+    .footer-link { color: #0d3b1e; text-decoration: none; font-weight: 600; }
+    .footer-link:hover { text-decoration: underline; }
+    .social-links { margin-top: 15px; }
+    .social-links a { margin: 0 10px; color: #0d3b1e; text-decoration: none; font-weight: 500; }
+
+    /* Button */
+    .button {
+      display: inline-block;
+      background: #27ae60;
+      color: white;
+      padding: 14px 32px;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      margin: 20px 0;
+      transition: background 0.2s;
+    }
+    .button:hover { background: #229954; }
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <!-- Header -->
+    <div class="header">
+      <h1 style="color: #2ecc71; margin-bottom: 15px; font-size: 28px;">{{shop.name}}</h1>
+      <div class="order-number">ORDER #{{order.name}}</div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="content">
+      <p class="greeting">Thank you for your order, {{customer.first_name}}!</p>
+
+      <p class="body-text">We're thrilled you've chosen us and we're working hard to get your order to you quickly and safely.</p>
+
+      <!-- Alert Banner -->
+      <div class="alert-banner">
+        <span class="alert-icon">🌡️</span>
+        <strong>Current Situation:</strong> The temperatures in your area are above our safety threshold for shipping live animals. We don't want your shipment sitting on a hot truck all day.
+      </div>
+
+      <p class="body-text"><strong>Here's the good news:</strong> To get your order out to you this week, we can route it to a <strong>UPS Access Point</strong> near you for pickup. Access Points are climate-controlled locations (often inside local shops like CVS, Michaels, UPS Stores, etc.), so your package stays safe indoors instead of waiting on a delivery truck.</p>
+
+      <!-- Instructions -->
+      <div class="instructions">
+        <h3>To find a UPS Access Point near you:</h3>
+
+        <div class="step">
+          <span class="step-number">1</span>
+          <strong>Visit ups.com</strong> and go to the "Find Locations" page (or search "UPS Access Point near me").
+        </div>
+
+        <div class="step">
+          <span class="step-number">2</span>
+          <strong>Enter your ZIP code</strong> or address.
+        </div>
+
+        <div class="step">
+          <span class="step-number">3</span>
+          <strong>Filter results</strong> for "UPS Access Point" locations (these are often inside local shops like CVS, Michaels, or other retailers).
+        </div>
+
+        <div class="step">
+          <span class="step-number">4</span>
+          <strong>Verify the location</strong> accepts packages for pickup. Most do, but it's worth confirming hours and that they're currently accepting deliveries.
+        </div>
+
+        <div class="step">
+          <span class="step-number">5</span>
+          <strong>Choose a convenient location</strong> and copy down the full street address.
+        </div>
+      </div>
+
+      <!-- UPS Note -->
+      <div class="ups-section">
+        <strong>📍 Note:</strong> There may be an additional cost at some Access Point locations, so confirm fees before choosing. Once you have an address, reply to this email with it and we'll get your order routed there immediately!
+      </div>
+
+      <!-- CTA -->
+      <div class="cta-section">
+        <strong>What happens next?</strong>
+        <p style="margin: 12px 0; color: #d4f5e2;">Reply with your preferred UPS Access Point address and we'll ship your order this week.</p>
+        <p style="margin: 12px 0; color: #d4f5e2;"><em>Otherwise, we can hold your order and reevaluate shipping again next week.</em></p>
+        <p class="reply-text" style="color: #f9e04b;"><strong>⏰ Please let us know as soon as possible</strong> — otherwise your order may be delayed.</p>
+      </div>
+
+      <p class="body-text" style="font-size: 14px; color: #999;">By placing an order, you acknowledge that you have read, understood, and agreed to our <a href="https://www.superiorshrimpaquatics.com/pages/shipping-info-practices" class="footer-link">Shipping & Live Arrival Guarantee policy</a> in full.</p>
+
+      <p class="body-text" style="margin-top: 30px;">Thank you for your patience and for choosing {{shop.name}}!</p>
+
+      <p style="color: #999; font-size: 14px;">Questions? Reply to this email or contact us at {{shop.email}}</p>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <p style="margin-bottom: 10px;"><strong>{{shop.name}}</strong></p>
+      <a href="{{shop.url}}" class="footer-link">Visit our store</a>
+      <div class="social-links">
+        <a href="https://www.facebook.com/p/Superior-Shrimp-Aquatics-61553268254349/">Facebook</a> ·
+        <a href="https://www.instagram.com/superior_shrimp_aquatics/">Instagram</a> ·
+        <a href="https://www.tiktok.com/@superiorshrimp">TikTok</a>
+      </div>
+      <p style="margin-top: 15px; color: #bbb;">© {{shop.name}}. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
