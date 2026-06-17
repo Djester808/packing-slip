@@ -71,10 +71,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         },
       );
 
+      console.log(`[Webhook] Tag mutation result:`, JSON.stringify(tagResult));
+
       if (tagResult.data?.tagsAdd?.userErrors?.length) {
-        console.error(`[Webhook] Error tagging order ${orderName}:`, tagResult.data.tagsAdd.userErrors);
+        console.error(`[Webhook] Error tagging order ${orderName}:`, JSON.stringify(tagResult.data.tagsAdd.userErrors));
+      } else if (tagResult.data?.tagsAdd?.node?.tags) {
+        console.log(`[Webhook] Successfully tagged order ${orderName}. Tags:`, tagResult.data.tagsAdd.node.tags);
       } else {
-        console.log(`[Webhook] Tagged order ${orderName} with "weather-hold"`);
+        console.log(`[Webhook] Tag mutation response:`, JSON.stringify(tagResult));
       }
 
       return json({ status: "tagged_for_weather_hold", alert: { headline: slip.alert.headline, body: slip.alert.body, level: slip.alert.level } });
