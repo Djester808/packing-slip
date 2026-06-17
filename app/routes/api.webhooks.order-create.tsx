@@ -75,7 +75,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log(`[Webhook] Order ${orderName} has weather alert: ${slip.alert.headline}`);
 
       const tagResult = await shopifyGraphQL(
-        `mutation addTags($id: ID!, $tags: [String!]!) { tagsAdd(id: $id, tags: $tags) { node { id tags } userErrors { field message } } }`,
+        `mutation addTags($id: ID!, $tags: [String!]!) { tagsAdd(id: $id, tags: $tags) { node { id } userErrors { field message } } }`,
         {
           id: `gid://shopify/Order/${orderId}`,
           tags: ["weather-hold"],
