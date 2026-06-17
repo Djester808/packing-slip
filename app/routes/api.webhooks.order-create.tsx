@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import crypto from "crypto";
 import { fetchSlip } from "../slip.server";
 import { shopifyGraphQL } from "../admin-api.server";
+import { sendWeatherDelayEmail } from "../weather-email.server";
 import prisma from "../db.server";
 
 const WEBHOOK_SECRET = process.env.SHOPIFY_WEBHOOK_SECRET;
@@ -86,6 +87,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         console.error(`[Webhook] Error tagging order ${orderName}:`, JSON.stringify(tagResult.data.tagsAdd.userErrors));
       } else if (tagResult.data?.tagsAdd?.node?.id) {
         console.log(`[Webhook] Successfully tagged order ${orderName} with "weather-hold"`);
+
+        // Send weather delay email to customer
+        if (slip.order.customerEmail) {
+          const firstName = slip.order.customerName?.split(" ")[0] || "there";
+          await sendWeatherDelayEmail(slip.order.customerEmail, firstName, orderName);
+        }
       }
 
       return json({ status: "tagged_for_weather_hold", alert: { headline: slip.alert.headline, body: slip.alert.body, level: slip.alert.level } });
