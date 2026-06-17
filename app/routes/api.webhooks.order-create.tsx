@@ -2,7 +2,6 @@ import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import crypto from "crypto";
 import { fetchSlip } from "../slip.server";
-import { shopifyGraphQL } from "../admin-api.server";
 import { sendWeatherDelayEmail } from "../weather-email.server";
 import prisma from "../db.server";
 
@@ -71,31 +70,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ status: "order_not_found" });
     }
 
-    // Tag order only if there's a danger alert
+    // Send email if there's a danger alert
     if (slip.alert && slip.alert.level === "danger") {
       console.log(`[Webhook] Order ${orderName} has weather alert: ${slip.alert.headline}`);
 
-      const tagResult = await shopifyGraphQL(
-        `mutation addTags($id: ID!, $tags: [String!]!) { tagsAdd(id: $id, tags: $tags) { node { id } userErrors { field message } } }`,
-        {
-          id: `gid://shopify/Order/${orderId}`,
-          tags: ["weather-hold"],
-        },
-      );
-
-      if (tagResult.data?.tagsAdd?.userErrors?.length) {
-        console.error(`[Webhook] Error tagging order ${orderName}:`, JSON.stringify(tagResult.data.tagsAdd.userErrors));
-      } else if (tagResult.data?.tagsAdd?.node?.id) {
-        console.log(`[Webhook] Successfully tagged order ${orderName} with "weather-hold"`);
-
-        // Send weather delay email to customer
-        if (slip.order.customerEmail) {
-          const firstName = slip.order.customerName?.split(" ")[0] || "there";
-          await sendWeatherDelayEmail(slip.order.customerEmail, firstName, orderName);
-        }
+      if (slip.order.customerEmail) {
+        const firstName = slip.order.customerName?.split(" ")[0] || "there";
+        const emailSent = await sendWeatherDelayEmail(slip.order.customerEmail, firstName, orderName);
+        return json({ status: "email_sent", alert: { headline: slip.alert.headline, body: slip.alert.body, level: slip.alert.level }, emailSent });
       }
-
-      return json({ status: "tagged_for_weather_hold", alert: { headline: slip.alert.headline, body: slip.alert.body, level: slip.alert.level } });
     }
 
     console.log(`[Webhook] Order ${orderName} has no weather alert`);
