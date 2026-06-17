@@ -59,7 +59,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // If there's a weather alert, tag the order
     if (slip.alert) {
-      console.log(`[Webhook] Order ${orderName} has weather alert: ${slip.alert.message}`);
+      console.log(`[Webhook] Order ${orderName} has weather alert: ${slip.alert.headline}`);
 
       await shopifyGraphQL(
         `mutation addTags($input: TagsAddInput!) { tagsAdd(input: $input) { node { id tags } userErrors { field message } } }`,
@@ -72,7 +72,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
 
       console.log(`[Webhook] Tagged order ${orderName} with "weather-hold"`);
-      return json({ status: "tagged_for_weather_hold", alert: slip.alert.message });
+      return json({ status: "tagged_for_weather_hold", alert: { headline: slip.alert.headline, body: slip.alert.body, level: slip.alert.level } });
     }
 
     console.log(`[Webhook] Order ${orderName} has no weather alert`);
