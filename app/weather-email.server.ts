@@ -26,8 +26,13 @@ export async function sendWeatherDelayEmail(
   email: string,
   firstName: string,
   orderName: string,
+  logoUrl?: string,
+  deliveryDate?: string,
 ): Promise<boolean> {
   try {
+    const logoHtml = logoUrl ? `<div style="margin-bottom:16px;"><img src="${logoUrl}" alt="Superior Shrimp & Aquatics" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.25);display:block;margin:0 auto;" /></div>` : "";
+    const deliveryHtml = deliveryDate ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Estimated Delivery:</strong> ${deliveryDate}</p>` : "";
+
     const html = `<!-- Superior Shrimp & Aquatics - Weather Delay Email -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0; padding:0; background-color:#f7f3ee;">
   <tr>
@@ -35,6 +40,7 @@ export async function sendWeatherDelayEmail(
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background-color:#ffffff; border-radius:14px; overflow:hidden; border:1px solid #e8e2da;">
         <tr>
           <td style="background-color:#b50707; background-image:linear-gradient(160deg,#b50707 0%,#F40909 100%); padding:32px 36px; text-align:center;">
+            ${logoHtml}
             <div style="font-family:'Playfair Display',Georgia,serif; font-size:26px; font-weight:700; color:#ffffff; line-height:1.2;">Superior Shrimp & Aquatics</div>
             <div style="font-family:'DM Sans',Arial,sans-serif; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#ffe5e5; margin-top:8px;">Weather Hold Notice</div>
           </td>
@@ -43,6 +49,7 @@ export async function sendWeatherDelayEmail(
           <td style="padding:36px 36px 8px 36px; font-family:'DM Sans',Arial,sans-serif;">
             <p style="font-family:'Playfair Display',Georgia,serif; font-size:22px; font-weight:600; color:#1e1a1a; margin:0 0 18px 0;">Thank you for your order, ${firstName}!</p>
             <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">Currently, the temperatures in your area are above our safety threshold for shipping live animals. We don't want your shipment sitting on a hot truck all day, so to get it out to you this week, we would need to route it to a <strong style="color:#111111;">UPS Access Point</strong> near you for pickup.</p>
+            ${deliveryHtml}
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px 0;">
               <tr>
                 <td style="background-color:#fff0f0; border-left:4px solid #F40909; border-radius:10px; padding:14px 18px;">
