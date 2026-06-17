@@ -57,8 +57,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ status: "order_not_found" });
     }
 
-    // If there's a weather alert, tag the order
-    if (slip.alert) {
+    // Tag order only if there's a danger or caution alert
+    if (slip.alert && (slip.alert.level === "danger" || slip.alert.level === "caution")) {
       console.log(`[Webhook] Order ${orderName} has weather alert: ${slip.alert.headline}`);
 
       const tagResult = await shopifyGraphQL(
