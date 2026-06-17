@@ -37,15 +37,16 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    const body = await request.text();
+    const body = await request.arrayBuffer();
+    const bodyText = new TextDecoder().decode(body);
 
-    // Verify webhook signature
-    if (!verifyWebhookSignature(request, body)) {
+    // Verify webhook signature using raw bytes
+    if (!verifyWebhookSignature(request, bodyText)) {
       console.warn("Invalid webhook signature");
       return json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const event = JSON.parse(body);
+    const event = JSON.parse(bodyText);
     const orderId = event.id?.toString();
     const orderName = event.name;
 
@@ -74,12 +75,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log(`[Webhook] Order ${orderName} has weather alert: ${slip.alert.headline}`);
 
       const tagResult = await shopifyGraphQL(
-        `mutation addTags($input: TagsAddInput!) { tagsAdd(input: $input) { node { id tags } userErrors { field message } } }`,
+        `mutation addTags($id: ID!, $tags: [String!]!) { tagsAdd(id: $id, tags: $tags) { node { id tags } userErrors { field message } } }`,
         {
-          input: {
-            id: `gid://shopify/Order/${orderId}`,
-            tags: ["weather-hold"],
-          },
+          id: `gid://shopify/Order/${orderId}`,
+          tags: ["weather-hold"],
         },
       );
 
