@@ -5,18 +5,30 @@ import { fetchSlip } from "../slip.server";
 import { shopifyGraphQL } from "../admin-api.server";
 import prisma from "../db.server";
 
-const WEBHOOK_SECRET = process.env.SHOPIFY_WEBHOOK_SECRET!;
+const WEBHOOK_SECRET = process.env.SHOPIFY_WEBHOOK_SECRET;
 
 function verifyWebhookSignature(request: Request, body: string): boolean {
+  if (!WEBHOOK_SECRET) {
+    console.error("[Webhook] SHOPIFY_WEBHOOK_SECRET not set!");
+    return false;
+  }
+
   const hmacHeader = request.headers.get("x-shopify-hmac-sha256");
-  if (!hmacHeader) return false;
+  if (!hmacHeader) {
+    console.error("[Webhook] No x-shopify-hmac-sha256 header");
+    return false;
+  }
 
   const hash = crypto
     .createHmac("sha256", WEBHOOK_SECRET)
     .update(body, "utf8")
     .digest("base64");
 
-  return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(hmacHeader));
+  const isValid = crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(hmacHeader));
+  if (!isValid) {
+    console.error("[Webhook] Signature mismatch. Expected:", hash, "Got:", hmacHeader);
+  }
+  return isValid;
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
