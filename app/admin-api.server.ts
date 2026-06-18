@@ -39,3 +39,20 @@ export async function shopifyGraphQL(query: string, variables?: object) {
   }
   return response.json();
 }
+
+export async function getShopLogo(): Promise<string | null> {
+  const data = await shopifyGraphQL(`
+    query {
+      shop {
+        brandAssets {
+          logo {
+            image {
+              url
+            }
+          }
+        }
+      }
+    }
+  `);
+  return data.data?.shop?.brandAssets?.logo?.image?.url ?? null;
+}
