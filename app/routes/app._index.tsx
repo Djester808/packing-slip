@@ -97,6 +97,7 @@ export const loader = async (_: LoaderFunctionArgs) => {
   const defaultShipDate = nextShip.toISOString().slice(0, 10);
   const emailedOrders = await prisma.emailedOrder.findMany({});
   const emailedOrderIds = new Set(emailedOrders.map((e) => e.orderId));
+  console.log(`[Index] Found ${emailedOrders.length} emailed orders:`, emailedOrders.map((e) => e.orderId));
   return json({ orders, printLocalOrders: settings.printLocalOrders, rolloverEnabled: settings.rolloverEnabled, shopDomain, defaultShipDate, emailedOrderIds: Array.from(emailedOrderIds) });
 };
 
