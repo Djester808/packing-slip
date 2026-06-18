@@ -66,3 +66,9 @@ model TransitCache {
 
   @@unique([zip, method, date])
 }
+
+model EmailedOrder {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  emailedAt DateTime @default(now())
+}

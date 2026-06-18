@@ -95,11 +95,14 @@ export const loader = async (_: LoaderFunctionArgs) => {
 
   const { date: nextShip } = nextShipDate();
   const defaultShipDate = nextShip.toISOString().slice(0, 10);
-  return json({ orders, printLocalOrders: settings.printLocalOrders, rolloverEnabled: settings.rolloverEnabled, shopDomain, defaultShipDate });
+  const emailedOrders = await prisma.emailedOrder.findMany({});
+  const emailedOrderIds = new Set(emailedOrders.map((e) => e.orderId));
+  return json({ orders, printLocalOrders: settings.printLocalOrders, rolloverEnabled: settings.rolloverEnabled, shopDomain, defaultShipDate, emailedOrderIds: Array.from(emailedOrderIds) });
 };
 
 export default function Index() {
-  const { orders, printLocalOrders, rolloverEnabled, shopDomain, defaultShipDate } = useLoaderData<typeof loader>();
+  const { orders, printLocalOrders, rolloverEnabled, shopDomain, defaultShipDate, emailedOrderIds } = useLoaderData<typeof loader>();
+  const emailedSet = new Set(emailedOrderIds);
   const navigate = useNavigate();
   const navigation = useNavigation();
   const [loadingSlipId, setLoadingSlipId] = useState<string | null>(null);
@@ -619,6 +622,9 @@ export default function Index() {
                       </td>
                       <td style={{ padding: "12px 14px", borderBottom: "1px solid #e1e3e5", fontWeight: 600, color: "#005bd3", whiteSpace: "nowrap" }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          {emailedSet.has(order.id) && (
+                            <span title="Weather delay email sent" style={{ fontSize: "16px", color: "#2d9900", fontWeight: "bold" }}>✓</span>
+                          )}
                           <a
                             href={shopDomain ? `https://${shopDomain}/admin/orders/${order.id}` : undefined}
                             target="_blank"
