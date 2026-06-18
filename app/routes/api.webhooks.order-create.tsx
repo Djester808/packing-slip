@@ -76,7 +76,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       if (slip.order.customerEmail) {
         const firstName = slip.order.customerName?.split(" ")[0] || "there";
-        const logoUrl = settings.logoUrl || undefined;
+        const logoUrl = settings.logoUrl || "https://pack-slip.fly.dev/logo.jpg";
         const deliveryDate = slip.weather?.deliveryDate || undefined;
         const maxTempF = slip.weather?.maxTempF || undefined;
         const transitDays = slip.weather?.transitDays || undefined;
