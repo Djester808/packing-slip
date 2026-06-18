@@ -79,8 +79,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const logoUrl = settings.logoUrl || "https://pack-slip.fly.dev/logo.jpg";
         const deliveryDate = slip.weather?.deliveryDate || undefined;
         const maxTempF = slip.weather?.maxTempF || undefined;
-        const transitDays = slip.weather?.transitDays || undefined;
-        const emailSent = await sendWeatherDelayEmail(slip.order.customerEmail, firstName, orderName, logoUrl, deliveryDate, maxTempF, transitDays);
+        const shippingMethod = slip.order.shippingMethod || undefined;
+        const emailSent = await sendWeatherDelayEmail(slip.order.customerEmail, firstName, orderName, logoUrl, deliveryDate, maxTempF, shippingMethod);
         return json({ status: "email_sent", alert: { headline: slip.alert.headline, body: slip.alert.body, level: slip.alert.level }, emailSent });
       }
     }

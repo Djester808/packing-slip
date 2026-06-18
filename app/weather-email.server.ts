@@ -25,13 +25,13 @@ export async function sendWeatherDelayEmail(
   logoUrl?: string,
   deliveryDate?: string,
   maxTempF?: number | null,
-  transitDays?: number,
+  shippingMethod?: string,
 ): Promise<boolean> {
   try {
     const logoHtml = logoUrl ? `<div style="margin-bottom:16px;"><img src="${logoUrl}" alt="Superior Shrimp & Aquatics" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.25);display:block;margin:0 auto;" /></div>` : "";
     const deliveryHtml = deliveryDate ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Estimated Delivery:</strong> ${deliveryDate}</p>` : "";
     const tempHtml = maxTempF ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Estimated Temp:</strong> ${Math.round(maxTempF)}°F</p>` : "";
-    const speedHtml = transitDays ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Shipping Speed:</strong> ${transitDays} day${transitDays > 1 ? "s" : ""}</p>` : "";
+    const speedHtml = shippingMethod ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Shipping Method:</strong> ${shippingMethod}</p>` : "";
 
     const html = `<!-- Superior Shrimp & Aquatics - Weather Delay Email -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0; padding:0; background-color:#f7f3ee;">
