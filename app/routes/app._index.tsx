@@ -269,13 +269,16 @@ export default function Index() {
   function printHoldList() {
     const date = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
     const rows = blockedOrders
-      .map((o) => `<tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-weight:600;">${shopDomain ? `<a href="https://${shopDomain}/admin/orders/${o.id}" target="_blank" rel="noopener noreferrer" style="color:#005bd3;text-decoration:none;">${o.name}</a>` : o.name}</td>
+      .map((o) => {
+        const checkmark = emailedSet.has(o.id) ? '<span style="color:#2d9900;font-weight:bold;margin-right:8px;">✓</span>' : '';
+        return `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-weight:600;">${checkmark}${shopDomain ? `<a href="https://${shopDomain}/admin/orders/${o.id}" target="_blank" rel="noopener noreferrer" style="color:#005bd3;text-decoration:none;">${o.name}</a>` : o.name}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;">${o.customerName}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#6d7175;">${[o.city, o.province, o.zip].filter(Boolean).join(", ")}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#6d7175;white-space:nowrap;">${o.createdAt}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#c00;font-weight:600;">${o.reason}</td>
-        </tr>`)
+        </tr>`;
+      })
       .join("");
     const html = `<!DOCTYPE html>
 <html>
