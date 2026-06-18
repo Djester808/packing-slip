@@ -58,6 +58,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ ok: true, intent });
   }
 
+  if (intent === "save-logo") {
+    await prisma.appSettings.upsert({
+      where: { id: "singleton" },
+      update: { logoUrl: form.get("logoUrl") as string || null },
+      create: { id: "singleton" },
+    });
+    return json({ ok: true, intent });
+  }
+
   if (intent === "add-rule") {
     const keyword = (form.get("keyword") as string).trim().toLowerCase();
     const days = parseInt(form.get("transitDays") as string);
@@ -91,10 +100,52 @@ export default function Settings() {
   const [cautionBelow, setCautionBelow] = useState(String(settings.cautionBelow));
   const [printLocalOrders, setPrintLocalOrders] = useState(settings.printLocalOrders);
   const [rolloverEnabled, setRolloverEnabled] = useState(settings.rolloverEnabled);
+  const [logoUrl, setLogoUrl] = useState(settings.logoUrl || "");
 
   return (
     <Page title="Settings">
       <BlockStack gap="500">
+
+        {/* Logo */}
+        <Card>
+          <BlockStack gap="400">
+            <Text as="h2" variant="headingMd">Logo</Text>
+            <Text as="p" variant="bodySm" tone="subdued">
+              URL to your logo image for weather delay emails
+            </Text>
+            <BlockStack gap="300">
+              <TextField
+                label="Logo URL"
+                name="logoUrl"
+                type="url"
+                value={logoUrl}
+                onChange={setLogoUrl}
+                placeholder="https://example.com/logo.png"
+                autoComplete="off"
+              />
+              {logoUrl && (
+                <div style={{ padding: "8px", background: "#f6f6f7", borderRadius: "4px" }}>
+                  <img src={logoUrl} alt="Logo preview" style={{ maxWidth: "72px", maxHeight: "72px", borderRadius: "50%" }} />
+                </div>
+              )}
+              <InlineStack gap="300" blockAlign="center">
+                <Button
+                  loading={isSaving}
+                  variant="primary"
+                  onClick={() => fetcher.submit(
+                    { intent: "save-logo", logoUrl },
+                    { method: "post" },
+                  )}
+                >
+                  Save logo
+                </Button>
+                {saved && (fetcher.data as any)?.intent === "save-logo" && (
+                  <Text as="span" variant="bodySm" tone="success">Saved</Text>
+                )}
+              </InlineStack>
+            </BlockStack>
+          </BlockStack>
+        </Card>
 
         {/* Temperature thresholds */}
         <Card>

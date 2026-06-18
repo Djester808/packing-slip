@@ -3,7 +3,6 @@ import { json } from "@remix-run/node";
 import crypto from "crypto";
 import { fetchSlip } from "../slip.server";
 import { sendWeatherDelayEmail } from "../weather-email.server";
-import { getShopLogo } from "../admin-api.server";
 import prisma from "../db.server";
 
 const WEBHOOK_SECRET = process.env.SHOPIFY_WEBHOOK_SECRET;
@@ -77,11 +76,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
       if (slip.order.customerEmail) {
         const firstName = slip.order.customerName?.split(" ")[0] || "there";
-        const logoUrl = await getShopLogo();
+        const logoUrl = settings.logoUrl || undefined;
         const deliveryDate = slip.weather?.deliveryDate || undefined;
         const maxTempF = slip.weather?.maxTempF || undefined;
         const transitDays = slip.weather?.transitDays || undefined;
-        const emailSent = await sendWeatherDelayEmail(slip.order.customerEmail, firstName, orderName, logoUrl || undefined, deliveryDate, maxTempF, transitDays);
+        const emailSent = await sendWeatherDelayEmail(slip.order.customerEmail, firstName, orderName, logoUrl, deliveryDate, maxTempF, transitDays);
         return json({ status: "email_sent", alert: { headline: slip.alert.headline, body: slip.alert.body, level: slip.alert.level }, emailSent });
       }
     }

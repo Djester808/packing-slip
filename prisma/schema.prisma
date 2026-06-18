@@ -53,6 +53,7 @@ model AppSettings {
   printLocalOrders  Boolean @default(false)
   rolloverEnabled   Boolean @default(true)
   delayEmailTemplate String @default("")
+  logoUrl           String?
 }
 
 model TransitCache {
