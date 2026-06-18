@@ -41,18 +41,17 @@ export async function shopifyGraphQL(query: string, variables?: object) {
 }
 
 export async function getShopLogo(): Promise<string | null> {
-  const data = await shopifyGraphQL(`
-    query {
-      shop {
-        brandAssets {
-          logo {
-            image {
-              url
-            }
-          }
+  try {
+    const data = await shopifyGraphQL(`
+      query {
+        shop {
+          name
         }
       }
-    }
-  `);
-  return data.data?.shop?.brandAssets?.logo?.image?.url ?? null;
+    `);
+    // TODO: Implement logo retrieval from app settings or hardcode as config
+    return null;
+  } catch {
+    return null;
+  }
 }
