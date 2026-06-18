@@ -4,19 +4,15 @@ let _transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 
 function makeTransporter() {
   if (!_transporter) {
+    console.log(`[Email] Initializing transporter for ${process.env.OUTLOOK_EMAIL}`);
     _transporter = nodemailer.createTransport({
-      pool: true,
-      maxConnections: 3,
-      maxMessages: Infinity,
-      host: "smtp.office365.com",
+      host: "smtp-mail.outlook.com",
       port: 587,
       secure: false,
-      requireTLS: true,
       auth: {
         user: process.env.OUTLOOK_EMAIL,
         pass: process.env.OUTLOOK_PASSWORD,
       },
-      tls: { ciphers: "SSLv3", rejectUnauthorized: false },
     });
   }
   return _transporter;
