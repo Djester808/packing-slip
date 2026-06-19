@@ -70,6 +70,23 @@ Matches the app's nextShipDate() logic:
 
 {% assign ship_date = ship_seconds | date: "%A, %B %d, %Y" %}
 
+{% comment %} Calculate estimated delivery based on shipping method transit time {% endcomment %}
+{% assign transit_days = 5 %}
+{% if shipping_method.title %}
+  {% if shipping_method.title contains "overnight" or shipping_method.title contains "next day" or shipping_method.title contains "1-day" %}
+    {% assign transit_days = 1 %}
+  {% elsif shipping_method.title contains "2-day" or shipping_method.title contains "2nd day" or shipping_method.title contains "express" %}
+    {% assign transit_days = 2 %}
+  {% elsif shipping_method.title contains "3-day" %}
+    {% assign transit_days = 3 %}
+  {% elsif shipping_method.title contains "ground" %}
+    {% assign transit_days = 5 %}
+  {% endif %}
+{% endif %}
+
+{% assign delivery_seconds = ship_seconds | plus: transit_days | times: seconds_per_day %}
+{% assign estimated_delivery = delivery_seconds | date: "%A, %B %d, %Y" %}
+
 {% capture email_body %}
   {% if has_pending_payment %}
     {% if buyer_action_required %}
@@ -91,14 +108,6 @@ to this Shipping & Live Arrival Guarantee policy in full.
       {% endcase %}
       {% if delivery_instructions != blank %}
         <p><b>Delivery information:</b> {{ delivery_instructions }}</p>
-      {% endif %}
-      {% if consolidated_estimated_delivery_time %}
-        {% if has_multiple_delivery_methods %}
-          <h3 class="estimated_delivery__title">Estimated delivery</h3>
-          <p>{{ consolidated_estimated_delivery_time }}</p>
-        {% else %}
-          <p>Estimated delivery <b>{{ consolidated_estimated_delivery_time }}</b></p>
-        {% endif %}
       {% endif %}
     {% endif %}
   {% endif %}
@@ -236,6 +245,10 @@ to this Shipping & Live Arrival Guarantee policy in full.
 
               <h2>{{ email_title }}</h2>
               <p>{{ email_body }}</p>
+
+              {% if requires_shipping and estimated_delivery %}
+                <p>Estimated delivery <b>{{ estimated_delivery }}</b></p>
+              {% endif %}
 
               <!-- ── SHIP DATE BANNER (standard shipping only) ── -->
               {% if requires_shipping %}
