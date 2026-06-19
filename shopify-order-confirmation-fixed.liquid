@@ -84,7 +84,8 @@ Matches the app's nextShipDate() logic:
   {% endif %}
 {% endif %}
 
-{% assign delivery_seconds = ship_seconds | plus: transit_days | times: seconds_per_day %}
+{% assign transit_seconds = transit_days | times: seconds_per_day %}
+{% assign delivery_seconds = ship_seconds | plus: transit_seconds %}
 {% assign estimated_delivery = delivery_seconds | date: "%A, %B %d, %Y" %}
 
 {% capture email_body %}
