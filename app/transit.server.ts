@@ -61,8 +61,16 @@ export async function getTransitDays(
   // Try UPS Time in Transit API
   if (destZip) {
     const upsDate = shipDate ?? nextShipDate().date;
-    const upsDays = await getUPSTransitDays(destZip, shippingMethodTitle, upsDate, destState, destCity).catch(() => null);
-    if (upsDays != null) return upsDays;
+    console.log(`[Transit] Calling UPS API for zip=${destZip}, method=${shippingMethodTitle}`);
+    const upsDays = await getUPSTransitDays(destZip, shippingMethodTitle, upsDate, destState, destCity).catch((e) => {
+      console.error(`[Transit] UPS API failed:`, e.message);
+      return null;
+    });
+    if (upsDays != null) {
+      console.log(`[Transit] UPS returned ${upsDays} days for ${shippingMethodTitle}`);
+      return upsDays;
+    }
+    console.log(`[Transit] UPS returned null, using defaults`);
   }
 
   // Fall back to DB rules (user-customizable)
