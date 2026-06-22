@@ -70,8 +70,10 @@ Matches the app's nextShipDate() logic:
 
 {% assign ship_date = ship_seconds | date: "%A, %B %d, %Y" %}
 
-{% comment %} Calculate estimated delivery based on shipping method transit time {% endcomment %}
-{% assign transit_days = 5 %}
+{% comment %} Calculate estimated delivery based on shipping method transit time
+Estimates are business days (Mon-Fri). For Ground, add days to account for weekends.
+{% endcomment %}
+{% assign transit_days = 3 %}
 {% if shipping_method.title %}
   {% if shipping_method.title contains "overnight" or shipping_method.title contains "next day" or shipping_method.title contains "1-day" %}
     {% assign transit_days = 1 %}
@@ -79,8 +81,8 @@ Matches the app's nextShipDate() logic:
     {% assign transit_days = 2 %}
   {% elsif shipping_method.title contains "3-day" %}
     {% assign transit_days = 3 %}
-  {% elsif shipping_method.title contains "ground" %}
-    {% assign transit_days = 5 %}
+  {% elsif shipping_method.title contains "ground" or shipping_method.title contains "standard" %}
+    {% assign transit_days = 7 %}
   {% endif %}
 {% endif %}
 
