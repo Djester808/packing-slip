@@ -42,7 +42,7 @@ export async function shopifyGraphQL(query: string, variables?: object) {
 
 export async function getShopLogo(): Promise<string | null> {
   try {
-    const data = await shopifyGraphQL(`
+    await shopifyGraphQL(`
       query {
         shop {
           name
