@@ -173,7 +173,10 @@ export async function fetchSlipBatch(
         try {
           results[i + j] = await buildSlipFromOrder(o, settings, shipDate);
         } catch (e) {
-          console.error(`[fetchSlipBatch] Error building slip for order ${o.name}:`, e instanceof Error ? e.message : String(e));
+          const errorMsg = e instanceof Error ? e.message : String(e);
+          const errorStack = e instanceof Error ? e.stack : "";
+          console.error(`[fetchSlipBatch] ✗ FAILED for ${o.name} (${o.id}): ${errorMsg}`);
+          if (errorStack) console.error(`[fetchSlipBatch] Stack: ${errorStack}`);
           // leave as null
         }
       }),
