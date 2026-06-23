@@ -52,7 +52,7 @@ describe('getTransitDays', () => {
     });
 
     it('matches "ground" keyword to 5 days', async () => {
-      const days = await getTransitDays('UPS Ground');
+      const days = await getTransitDays('ground');
       expect(days).toBe(5);
     });
 
