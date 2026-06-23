@@ -188,12 +188,11 @@ export async function getUPSTransitDays(
 
     if (!data) return null;
 
-    console.log(`[UPS] First response for ${destZip}: ambiguous=${data?.destinationAmbiguous}, hasPickList=${!!data?.destinationPickList?.length}`);
-
     // If destination is ambiguous, retry with first suggested city
-    if (data?.destinationAmbiguous && data?.destinationPickList?.length > 0) {
+    const isAmbiguous = data?.validationList?.destinationAmbiguous === true;
+    if (isAmbiguous && data?.destinationPickList?.length > 0) {
       const suggestedCity = data.destinationPickList[0].city;
-      console.log(`[UPS] destination ambiguous for ${destZip}, retrying with city: ${suggestedCity}`);
+      console.log(`[UPS] destination ambiguous for ${destZip}, retrying with suggested city: ${suggestedCity}`);
       data = await makeRequest(suggestedCity);
     }
 
