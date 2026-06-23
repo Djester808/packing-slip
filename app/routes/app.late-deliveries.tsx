@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
+import { useState } from "react";
 import { Page, Card, Text, BlockStack, Badge } from "@shopify/polaris";
 import { shopifyGraphQL } from "../admin-api.server";
 import { getTransitDays } from "../transit.server";
@@ -115,6 +116,15 @@ export const loader = async (_: LoaderFunctionArgs) => {
 
 export default function LateDeliveries() {
   const { lateDeliveries } = useLoaderData<typeof loader>();
+  const [filter, setFilter] = useState<"all" | "overnight" | "2day">("all");
+
+  const filtered = lateDeliveries.filter((delivery) => {
+    if (filter === "all") return true;
+    const method = delivery.shippingMethod.toLowerCase();
+    if (filter === "overnight") return /overnight|next.?day|1.?day|express|priority mail express/i.test(method);
+    if (filter === "2day") return /2.?d|2nd|two.?day|free 2.?day|priority mail\b/i.test(method);
+    return true;
+  });
 
   return (
     <Page title="Late Deliveries">
@@ -122,14 +132,58 @@ export default function LateDeliveries() {
         <Card>
           <BlockStack gap="400">
             <Text as="h2" variant="headingMd">
-              2026 Late Deliveries (Overnight & 2-Day Only)
+              2026 Late Deliveries
             </Text>
+            <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+              <button
+                onClick={() => setFilter("all")}
+                style={{
+                  padding: "8px 14px",
+                  border: filter === "all" ? "2px solid #005bd3" : "1px solid #c4cdd5",
+                  borderRadius: "6px",
+                  background: filter === "all" ? "#f0f6ff" : "#fff",
+                  color: filter === "all" ? "#005bd3" : "#1a1a1a",
+                  cursor: "pointer",
+                  fontWeight: filter === "all" ? 600 : 400,
+                }}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setFilter("overnight")}
+                style={{
+                  padding: "8px 14px",
+                  border: filter === "overnight" ? "2px solid #005bd3" : "1px solid #c4cdd5",
+                  borderRadius: "6px",
+                  background: filter === "overnight" ? "#f0f6ff" : "#fff",
+                  color: filter === "overnight" ? "#005bd3" : "#1a1a1a",
+                  cursor: "pointer",
+                  fontWeight: filter === "overnight" ? 600 : 400,
+                }}
+              >
+                Overnight
+              </button>
+              <button
+                onClick={() => setFilter("2day")}
+                style={{
+                  padding: "8px 14px",
+                  border: filter === "2day" ? "2px solid #005bd3" : "1px solid #c4cdd5",
+                  borderRadius: "6px",
+                  background: filter === "2day" ? "#f0f6ff" : "#fff",
+                  color: filter === "2day" ? "#005bd3" : "#1a1a1a",
+                  cursor: "pointer",
+                  fontWeight: filter === "2day" ? 600 : 400,
+                }}
+              >
+                2-Day
+              </button>
+            </div>
             <Text as="p" variant="bodyMd" tone="subdued">
-              Total: {lateDeliveries.length} orders
+              Total: {filtered.length} orders
             </Text>
-            {lateDeliveries.length === 0 ? (
+            {filtered.length === 0 ? (
               <Text as="p" variant="bodyMd">
-                No late deliveries found for overnight and 2-day shipping in 2026.
+                {lateDeliveries.length === 0 ? "No late deliveries found in 2026." : "No late deliveries match this filter."}
               </Text>
             ) : (
               <div style={{ overflowX: "auto" }}>
@@ -151,9 +205,18 @@ export default function LateDeliveries() {
                     </tr>
                   </thead>
                   <tbody>
-                    {lateDeliveries.map((delivery, idx) => (
+                    {filtered.map((delivery, idx) => (
                       <tr key={delivery.orderId} style={{ borderBottom: "1px solid #e1e3e5", backgroundColor: idx % 2 === 0 ? "#f9f9f9" : "#fff" }}>
-                        <td style={{ padding: "12px" }}>{delivery.orderName}</td>
+                        <td style={{ padding: "12px" }}>
+                          <a
+                            href={`https://admin.shopify.com/admin/orders/${delivery.orderId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: "#005bd3", textDecoration: "none", fontWeight: 600 }}
+                          >
+                            {delivery.orderName}
+                          </a>
+                        </td>
                         <td style={{ padding: "12px" }}>{delivery.customerName}</td>
                         <td style={{ padding: "12px" }}>{delivery.shippingMethod}</td>
                         <td style={{ padding: "12px" }}>{delivery.pickedUpAt}</td>
