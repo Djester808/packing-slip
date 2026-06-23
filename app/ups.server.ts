@@ -45,6 +45,7 @@ function matchService(services: any[], shippingMethod: string): number | null {
   const methodLower = shippingMethod.toLowerCase().replace(/[®™]/g, "").replace(/\s+/g, " ").trim();
   let best: { days: number; score: number } | null = null;
 
+  // Try matching by description text first
   for (const svc of services) {
     const desc = (svc.serviceLevelDescription ?? "").toLowerCase().replace(/[®™]/g, "").replace(/\s+/g, " ").trim();
     if (!desc || svc.businessTransitDays == null) continue;
@@ -59,11 +60,37 @@ function matchService(services: any[], shippingMethod: string): number | null {
     }
   }
 
+  // If no text match, try matching by service level code
+  if (!best) {
+    const serviceCodeMap: Record<string, string[]> = {
+      "ground": ["GND", "GNDOD"],
+      "2nd day": ["2DA", "2DM", "2DAM"],
+      "next day": ["1DA", "1DM", "1DAM"],
+      "3day": ["3DA"],
+      "express": ["XPR"],
+    };
+
+    for (const [methodKeyword, codes] of Object.entries(serviceCodeMap)) {
+      if (methodLower.includes(methodKeyword)) {
+        for (const svc of services) {
+          if (codes.includes(svc.serviceLevel)) {
+            const days = parseInt(String(svc.businessTransitDays), 10);
+            best = { days, score: 100 };
+            console.log(`[UPS] matched by serviceLevel "${svc.serviceLevel}" → ${svc.businessTransitDays} days`);
+            break;
+          }
+        }
+        if (best) break;
+      }
+    }
+  }
+
   if (!best) {
     console.log(`[UPS] NO MATCH for "${methodLower}" in ${services.length} services:`);
     services.slice(0, 3).forEach((svc, i) => {
       const desc = (svc.serviceLevelDescription ?? "").toLowerCase();
-      console.log(`  [${i}] "${desc}" → ${svc.businessTransitDays} days`);
+      const code = svc.serviceLevel ?? "?";
+      console.log(`  [${i}] "${desc}" (code: ${code}) → ${svc.businessTransitDays} days`);
     });
   }
 
