@@ -189,7 +189,7 @@ export default function LateDeliveries() {
             </Text>
             {filtered.length === 0 ? (
               <Text as="p" variant="bodyMd">
-                {lateDeliveries.length === 0 ? "No late deliveries found in 2026." : "No late deliveries match this filter."}
+                {lateDeliveries.length === 0 ? "No late deliveries found." : "No late deliveries match this filter."}
               </Text>
             ) : (
               <div style={{ overflowX: "auto" }}>
