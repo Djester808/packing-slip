@@ -172,7 +172,8 @@ export async function fetchSlipBatch(
       chunk.map(async (o, j) => {
         try {
           results[i + j] = await buildSlipFromOrder(o, settings, shipDate);
-        } catch {
+        } catch (e) {
+          console.error(`[fetchSlipBatch] Error building slip for order ${o.name}:`, e instanceof Error ? e.message : String(e));
           // leave as null
         }
       }),
