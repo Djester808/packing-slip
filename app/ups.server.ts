@@ -186,14 +186,16 @@ export async function getUPSTransitDays(
   try {
     let data = await makeRequest();
 
+    if (!data) return null;
+
+    console.log(`[UPS] First response for ${destZip}: ambiguous=${data?.destinationAmbiguous}, hasPickList=${!!data?.destinationPickList?.length}`);
+
     // If destination is ambiguous, retry with first suggested city
     if (data?.destinationAmbiguous && data?.destinationPickList?.length > 0) {
       const suggestedCity = data.destinationPickList[0].city;
       console.log(`[UPS] destination ambiguous for ${destZip}, retrying with city: ${suggestedCity}`);
       data = await makeRequest(suggestedCity);
     }
-
-    if (!data) return null;
 
     console.log("[UPS] transit response keys", JSON.stringify(Object.keys(data ?? {})));
 
