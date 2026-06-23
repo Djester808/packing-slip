@@ -197,37 +197,79 @@ export async function getInventoryTotals(): Promise<Array<{ title: string; quant
   const itemMap = new Map<string, { quantity: number; variants: Set<string> }>();
   let cursor: string | null = null;
   let hasNextPage = true;
+  let totalOrdersProcessed = 0;
+  let totalItemsProcessed = 0;
 
-  while (hasNextPage) {
-    const data = await shopifyGraphQL(query, cursor ? { after: cursor } : {});
-    const orders = (data.data?.orders?.edges ?? []).map((e: any) => e.node);
+  try {
+    while (hasNextPage) {
+      const data = await shopifyGraphQL(query, cursor ? { after: cursor } : {});
 
-    for (const order of orders) {
-      const lineItems = order.lineItems?.edges ?? [];
-      for (const { node: item } of lineItems) {
-        if (/^tip$/i.test(item.title?.trim())) continue;
-        const qty = item.currentQuantity ?? item.quantity;
-        if (qty <= 0) continue;
+      if (data.errors) {
+        console.error("[Inventory] GraphQL Error:", JSON.stringify(data.errors));
+        break;
+      }
 
-        const variant = item.variant?.title && item.variant.title !== "Default Title" ? item.variant.title : null;
-        const total = getPackBadgeTotal(variant, qty, item.title, isLivestockCollection(lineItemCollections(item)));
-        const variantKey = variant || "(no variant)";
+      const orders = (data.data?.orders?.edges ?? []).map((e: any) => e.node);
+      console.log(`[Inventory] Fetched ${orders.length} orders, cursor: ${cursor}`);
 
-        if (itemMap.has(item.title)) {
-          const existing = itemMap.get(item.title)!;
-          existing.quantity += total;
-          existing.variants.add(variantKey);
-        } else {
-          itemMap.set(item.title, { quantity: total, variants: new Set([variantKey]) });
+      if (orders.length === 0) {
+        console.log("[Inventory] No more orders to fetch");
+        break;
+      }
+
+      for (const order of orders) {
+        totalOrdersProcessed++;
+        const lineItems = order.lineItems?.edges ?? [];
+        console.log(`[Inventory] Order ${order.name}: ${lineItems.length} line items`);
+
+        for (const { node: item } of lineItems) {
+          totalItemsProcessed++;
+
+          if (/^tip$/i.test(item.title?.trim())) {
+            console.log(`[Inventory] Skipping tip: ${item.title}`);
+            continue;
+          }
+
+          const qty = item.currentQuantity ?? item.quantity;
+          console.log(`[Inventory] Item: "${item.title}" qty=${qty} variant="${item.variant?.title}"`);
+
+          if (qty <= 0) {
+            console.log(`[Inventory] Skipping qty <= 0: ${item.title}`);
+            continue;
+          }
+
+          const variant = item.variant?.title && item.variant.title !== "Default Title" ? item.variant.title : null;
+          const collections = lineItemCollections(item);
+          const isLivestock = isLivestockCollection(collections);
+          const total = getPackBadgeTotal(variant, qty, item.title, isLivestock);
+
+          console.log(`[Inventory] Calculated total=${total} for "${item.title}" (isLivestock=${isLivestock})`);
+
+          const variantKey = variant || "(no variant)";
+
+          if (itemMap.has(item.title)) {
+            const existing = itemMap.get(item.title)!;
+            existing.quantity += total;
+            existing.variants.add(variantKey);
+            console.log(`[Inventory] Updated "${item.title}": quantity now ${existing.quantity}`);
+          } else {
+            itemMap.set(item.title, { quantity: total, variants: new Set([variantKey]) });
+            console.log(`[Inventory] Added new item "${item.title}": quantity ${total}`);
+          }
         }
       }
-    }
 
-    hasNextPage = data.data?.orders?.pageInfo?.hasNextPage ?? false;
-    cursor = data.data?.orders?.pageInfo?.endCursor ?? null;
+      hasNextPage = data.data?.orders?.pageInfo?.hasNextPage ?? false;
+      cursor = data.data?.orders?.pageInfo?.endCursor ?? null;
+      console.log(`[Inventory] hasNextPage=${hasNextPage}, cursor=${cursor}`);
+    }
+  } catch (e) {
+    console.error("[Inventory] Exception:", e);
   }
 
-  return Array.from(itemMap.entries())
+  console.log(`[Inventory] Final totals: ${totalOrdersProcessed} orders, ${totalItemsProcessed} items checked, ${itemMap.size} distinct products`);
+
+  const result = Array.from(itemMap.entries())
     .map(([title, data]) => ({
       title,
       quantity: data.quantity,
@@ -235,4 +277,7 @@ export async function getInventoryTotals(): Promise<Array<{ title: string; quant
       variants: Array.from(data.variants).join(", "),
     }))
     .sort((a, b) => b.quantity - a.quantity);
+
+  console.log(`[Inventory] Returning ${result.length} results`);
+  return result;
 }
