@@ -63,20 +63,21 @@ function matchService(services: any[], shippingMethod: string): number | null {
   // If no text match, try matching by service level code
   if (!best) {
     const serviceCodeMap: Record<string, string[]> = {
-      "ground": ["GND", "GNDOD"],
-      "2nd day": ["2DA", "2DM", "2DAM"],
-      "next day": ["1DA", "1DM", "1DAM"],
+      "ground": ["GND", "GNDOD", "GNDA"],
+      "2nd day": ["2DA", "2DM", "2DAM", "2D"],
+      "next day": ["1DA", "1DM", "1DAM", "1D"],
       "3day": ["3DA"],
-      "express": ["XPR"],
+      "express": ["XPR", "XPD"],
     };
 
     for (const [methodKeyword, codes] of Object.entries(serviceCodeMap)) {
       if (methodLower.includes(methodKeyword)) {
         for (const svc of services) {
-          if (codes.includes(svc.serviceLevel)) {
+          const svcCode = (svc.serviceLevel ?? "").toUpperCase();
+          if (codes.includes(svcCode)) {
             const days = parseInt(String(svc.businessTransitDays), 10);
             best = { days, score: 100 };
-            console.log(`[UPS] matched by serviceLevel "${svc.serviceLevel}" → ${svc.businessTransitDays} days`);
+            console.log(`[UPS] matched by serviceLevel "${svcCode}" → ${svc.businessTransitDays} days`);
             break;
           }
         }
@@ -85,12 +86,31 @@ function matchService(services: any[], shippingMethod: string): number | null {
     }
   }
 
+  // Last resort: if still no match but order is for a ground method, pick the slowest ground-ish service
+  if (!best && methodLower.includes("ground")) {
+    const candidates = services.filter(s => {
+      const code = (s.serviceLevel ?? "").toUpperCase();
+      const desc = (s.serviceLevelDescription ?? "").toLowerCase();
+      // Pick services that look like ground (not 1DA, 2DA, etc.)
+      return !code.startsWith("1") && !code.startsWith("2") && !code.startsWith("3") && desc.includes("ground");
+    });
+    if (candidates.length > 0) {
+      const slowest = candidates.reduce((prev, curr) =>
+        (parseInt(String(curr.businessTransitDays), 10) > parseInt(String(prev.businessTransitDays), 10)) ? curr : prev
+      );
+      const days = parseInt(String(slowest.businessTransitDays), 10);
+      best = { days, score: 50 };
+      console.log(`[UPS] fallback: matched ground service "${slowest.serviceLevelDescription}" → ${days} days`);
+    }
+  }
+
   if (!best) {
     console.log(`[UPS] NO MATCH for "${methodLower}" in ${services.length} services:`);
-    services.slice(0, 3).forEach((svc, i) => {
+    console.log(`[UPS] ALL services (${services.length}):`);
+    services.forEach((svc, i) => {
       const desc = (svc.serviceLevelDescription ?? "").toLowerCase();
       const code = svc.serviceLevel ?? "?";
-      console.log(`  [${i}] "${desc}" (code: ${code}) → ${svc.businessTransitDays} days`);
+      console.log(`  [${i}] code="${code}" desc="${desc}" days=${svc.businessTransitDays}`);
     });
   }
 
