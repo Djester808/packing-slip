@@ -165,7 +165,7 @@ export async function getUPSTransitDays(
         destinationCountryCode: "US",
         destinationPostalCode: destZip,
         ...(destState ? { destinationStateProvince: destState } : {}),
-        ...(destCity ? { destinationCityName: destCity } : {}),
+        // NOTE: Omit destinationCityName - zip code alone is sufficient and city names can cause "ambiguous" errors
         weight: "1",
         weightUnitOfMeasure: "LBS",
         shipmentContentsValue: "10",
