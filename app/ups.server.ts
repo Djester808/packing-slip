@@ -157,22 +157,26 @@ export async function getUPSTransitDays(
         transId: crypto.randomUUID(),
         transactionSrc: "PackSlip",
       },
-      body: JSON.stringify({
-        originCountryCode: "US",
-        originPostalCode: originZip,
-        originStateProvince: "MN",
-        originCityName: "DULUTH",
-        destinationCountryCode: "US",
-        destinationPostalCode: destZip,
-        // Using ZIP ONLY for destination - omit state and city to avoid ambiguity errors
-        weight: "1",
-        weightUnitOfMeasure: "LBS",
-        shipmentContentsValue: "10",
-        shipmentContentsCurrencyCode: "USD",
-        billType: "03",
-        shipDate: shipDateStr,
-        numberOfPackages: "1",
-      }),
+      body: (() => {
+        const payload = {
+          originCountryCode: "US",
+          originPostalCode: originZip,
+          originStateProvince: "MN",
+          originCityName: "DULUTH",
+          destinationCountryCode: "US",
+          destinationPostalCode: destZip,
+          // Using ZIP ONLY for destination - omit state and city to avoid ambiguity errors
+          weight: "1",
+          weightUnitOfMeasure: "LBS",
+          shipmentContentsValue: "10",
+          shipmentContentsCurrencyCode: "USD",
+          billType: "03",
+          shipDate: shipDateStr,
+          numberOfPackages: "1",
+        };
+        console.log(`[UPS] Request for ${destZip}: ${JSON.stringify(Object.keys(payload))}`);
+        return JSON.stringify(payload);
+      })(),
     });
     if (!res.ok) {
       const text = await res.text();
