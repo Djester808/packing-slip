@@ -59,6 +59,14 @@ function matchService(services: any[], shippingMethod: string): number | null {
     }
   }
 
+  if (!best) {
+    console.log(`[UPS] NO MATCH for "${methodLower}" in ${services.length} services:`);
+    services.slice(0, 3).forEach((svc, i) => {
+      const desc = (svc.serviceLevelDescription ?? "").toLowerCase();
+      console.log(`  [${i}] "${desc}" → ${svc.businessTransitDays} days`);
+    });
+  }
+
   return best?.days ?? null;
 }
 
