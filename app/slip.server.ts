@@ -209,7 +209,19 @@ export async function getInventoryTotals(): Promise<Array<{ title: string; quant
         break;
       }
 
-      const orders = (data.data?.orders?.edges ?? []).map((e: any) => e.node);
+      const ordersEdges = data.data?.orders?.edges ?? [];
+      console.log(`[Inventory] Raw response structure - has data: ${!!data.data}, has orders: ${!!data.data?.orders}, edges count: ${ordersEdges.length}`);
+
+      if (ordersEdges.length > 0) {
+        const firstOrder = ordersEdges[0].node;
+        console.log(`[Inventory] First order structure - name: ${firstOrder.name}, has lineItems: ${!!firstOrder.lineItems}, lineItems type: ${typeof firstOrder.lineItems}`);
+        if (firstOrder.lineItems) {
+          console.log(`[Inventory] lineItems keys:`, Object.keys(firstOrder.lineItems));
+          console.log(`[Inventory] lineItems.edges count:`, firstOrder.lineItems.edges?.length ?? 'undefined');
+        }
+      }
+
+      const orders = ordersEdges.map((e: any) => e.node);
       console.log(`[Inventory] Fetched ${orders.length} orders, cursor: ${cursor}`);
 
       if (orders.length === 0) {
