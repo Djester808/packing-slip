@@ -50,7 +50,6 @@ export const loader = async (_: LoaderFunctionArgs) => {
     );
 
     const orders = data.data?.orders?.edges ?? [];
-    totalOrders += orders.length;
 
     for (const edge of orders) {
       const order = edge.node;
