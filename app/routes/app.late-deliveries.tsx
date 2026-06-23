@@ -18,8 +18,8 @@ interface LateDelivery {
   daysLate: number;
 }
 
-// Match: overnight, next day, 1-day, 2-day, 2nd day, express, priority mail express, etc.
-const FAST_METHODS_RE = /overnight|next.?day|1.?day|2.?d|2nd|two.?day|express|priority mail express/i;
+// Match: overnight, next day, 1-day only (no 2-day)
+const FAST_METHODS_RE = /overnight|next.?day|1.?day|express(?!\s*mail)/i;
 
 export const loader = async (_: LoaderFunctionArgs) => {
   const lateDeliveries: LateDelivery[] = [];
@@ -41,6 +41,7 @@ export const loader = async (_: LoaderFunctionArgs) => {
             customer { firstName lastName }
             shippingAddress { zip city province }
             shippingLine { title }
+            tags
             fulfillments(first: 100) {
               id status createdAt updatedAt inTransitAt deliveredAt
             }
@@ -55,6 +56,9 @@ export const loader = async (_: LoaderFunctionArgs) => {
     for (const edge of orders) {
       const order = edge.node;
       const shippingMethod = order.shippingLine?.title ?? "";
+
+      // Skip orders with claim-submitted tag
+      if (order.tags?.includes("claim-submitted")) continue;
 
       if (!FAST_METHODS_RE.test(shippingMethod)) continue;
 
@@ -116,13 +120,12 @@ export const loader = async (_: LoaderFunctionArgs) => {
 
 export default function LateDeliveries() {
   const { lateDeliveries } = useLoaderData<typeof loader>();
-  const [filter, setFilter] = useState<"all" | "overnight" | "2day">("all");
+  const [filter, setFilter] = useState<"all" | "ups" | "usps">("all");
 
   const filtered = lateDeliveries.filter((delivery) => {
     if (filter === "all") return true;
-    const method = delivery.shippingMethod.toLowerCase();
-    if (filter === "overnight") return /overnight|next.?day|1.?day|express|priority mail express/i.test(method);
-    if (filter === "2day") return /2.?d|2nd|two.?day|free 2.?day|priority mail\b/i.test(method);
+    if (filter === "ups") return /\bups\b/i.test(delivery.shippingMethod);
+    if (filter === "usps") return /usps|priority mail|express/i.test(delivery.shippingMethod);
     return true;
   });
 
@@ -150,32 +153,32 @@ export default function LateDeliveries() {
                 All
               </button>
               <button
-                onClick={() => setFilter("overnight")}
+                onClick={() => setFilter("ups")}
                 style={{
                   padding: "8px 14px",
-                  border: filter === "overnight" ? "2px solid #005bd3" : "1px solid #c4cdd5",
+                  border: filter === "ups" ? "2px solid #005bd3" : "1px solid #c4cdd5",
                   borderRadius: "6px",
-                  background: filter === "overnight" ? "#f0f6ff" : "#fff",
-                  color: filter === "overnight" ? "#005bd3" : "#1a1a1a",
+                  background: filter === "ups" ? "#f0f6ff" : "#fff",
+                  color: filter === "ups" ? "#005bd3" : "#1a1a1a",
                   cursor: "pointer",
-                  fontWeight: filter === "overnight" ? 600 : 400,
+                  fontWeight: filter === "ups" ? 600 : 400,
                 }}
               >
-                Overnight
+                UPS
               </button>
               <button
-                onClick={() => setFilter("2day")}
+                onClick={() => setFilter("usps")}
                 style={{
                   padding: "8px 14px",
-                  border: filter === "2day" ? "2px solid #005bd3" : "1px solid #c4cdd5",
+                  border: filter === "usps" ? "2px solid #005bd3" : "1px solid #c4cdd5",
                   borderRadius: "6px",
-                  background: filter === "2day" ? "#f0f6ff" : "#fff",
-                  color: filter === "2day" ? "#005bd3" : "#1a1a1a",
+                  background: filter === "usps" ? "#f0f6ff" : "#fff",
+                  color: filter === "usps" ? "#005bd3" : "#1a1a1a",
                   cursor: "pointer",
-                  fontWeight: filter === "2day" ? 600 : 400,
+                  fontWeight: filter === "usps" ? 600 : 400,
                 }}
               >
-                2-Day
+                USPS
               </button>
             </div>
             <Text as="p" variant="bodyMd" tone="subdued">
