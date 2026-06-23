@@ -86,7 +86,12 @@ export const loader = async (_: LoaderFunctionArgs) => {
         const promisedDelivery = new Date(pickedUpAt);
         promisedDelivery.setDate(promisedDelivery.getDate() + transitDays);
 
-        const daysLate = Math.ceil((deliveredAt.getTime() - promisedDelivery.getTime()) / (1000 * 60 * 60 * 24));
+        // Calculate days late using only date portions (ignore time of day)
+        const pickedUpDate = new Date(pickedUpAt.getFullYear(), pickedUpAt.getMonth(), pickedUpAt.getDate());
+        const deliveredDate = new Date(deliveredAt.getFullYear(), deliveredAt.getMonth(), deliveredAt.getDate());
+        const promisedDate = new Date(promisedDelivery.getFullYear(), promisedDelivery.getMonth(), promisedDelivery.getDate());
+
+        const daysLate = Math.ceil((deliveredDate.getTime() - promisedDate.getTime()) / (1000 * 60 * 60 * 24));
 
         if (daysLate > 0) {
           lateDeliveries.push({
