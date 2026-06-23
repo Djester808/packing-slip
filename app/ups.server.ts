@@ -106,7 +106,7 @@ export async function getUPSTransitDays(
         originCountryCode: "US",
         originPostalCode: originZip,
         originStateProvince: "MN",
-        originCityName: "Duluth",
+        originCityName: "DULUTH",
         destinationCountryCode: "US",
         destinationPostalCode: destZip,
         ...(destState ? { destinationStateProvince: destState } : {}),
