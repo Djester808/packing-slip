@@ -185,7 +185,7 @@ export async function fetchSlipBatch(
 
 export async function getInventoryTotals(): Promise<Array<{ title: string; quantity: number; variantCount: number; variants: string }>> {
   const query = `query getOrders($after: String) {
-    orders(first: 250, after: $after, query: "fulfillment_status:not_fulfilled") {
+    orders(first: 250, after: $after, query: "fulfillment_status:unfulfilled") {
       edges { node { ${ORDER_FIELDS} } }
       pageInfo { hasNextPage endCursor }
     }
@@ -239,7 +239,7 @@ export async function getInventoryTotals(): Promise<Array<{ title: string; quant
             continue;
           }
 
-          const qty = item.currentQuantity ?? item.quantity;
+          const qty = item.quantity ?? item.currentQuantity;
           console.log(`[Inventory] Item: "${item.title}" qty=${qty} variant="${item.variant?.title}"`);
 
           if (qty <= 0) {
