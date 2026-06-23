@@ -65,22 +65,41 @@ function matchService(services: any[], shippingMethod: string): number | null {
       "ground": ["GND", "GNDOD", "GNDA"],
       "2nd day": ["2DA", "2DM", "2DAM", "2D"],
       "next day": ["1DA", "1DM", "1DAM", "1D"],
+      "saver": ["1DA", "1DM", "1DAM", "1D"],  // Saver variants are next-day
       "3day": ["3DA"],
       "express": ["XPR", "XPD"],
+      "overnight": ["1DA", "1DM", "1DAM", "1D"],
     };
 
-    for (const [methodKeyword, codes] of Object.entries(serviceCodeMap)) {
-      if (methodLower.includes(methodKeyword)) {
-        for (const svc of services) {
-          const svcCode = (svc.serviceLevel ?? "").toUpperCase();
-          if (codes.includes(svcCode)) {
-            const days = parseInt(String(svc.businessTransitDays), 10);
-            best = { days, score: 100 };
-            console.log(`[UPS] matched by serviceLevel "${svcCode}" → ${svc.businessTransitDays} days`);
-            break;
+    // Check for combined methods first (e.g., "ground and 2 day upgrade")
+    if (methodLower.includes("ground") && methodLower.includes("2")) {
+      const code2DA = services.find(s => ["2DA", "2DM", "2DAM", "2D"].includes((s.serviceLevel ?? "").toUpperCase()));
+      if (code2DA) {
+        best = { days: parseInt(String(code2DA.businessTransitDays), 10), score: 100 };
+        console.log(`[UPS] matched combined method (ground + 2day) → ${code2DA.businessTransitDays} days`);
+      }
+    } else if (methodLower.includes("ground") && (methodLower.includes("overnight") || methodLower.includes("1"))) {
+      const code1DA = services.find(s => ["1DA", "1DM", "1DAM", "1D"].includes((s.serviceLevel ?? "").toUpperCase()));
+      if (code1DA) {
+        best = { days: parseInt(String(code1DA.businessTransitDays), 10), score: 100 };
+        console.log(`[UPS] matched combined method (ground + overnight) → ${code1DA.businessTransitDays} days`);
+      }
+    }
+
+    if (!best) {
+      for (const [methodKeyword, codes] of Object.entries(serviceCodeMap)) {
+        if (methodLower.includes(methodKeyword)) {
+          for (const svc of services) {
+            const svcCode = (svc.serviceLevel ?? "").toUpperCase();
+            if (codes.includes(svcCode)) {
+              const days = parseInt(String(svc.businessTransitDays), 10);
+              best = { days, score: 100 };
+              console.log(`[UPS] matched by serviceLevel "${svcCode}" → ${svc.businessTransitDays} days`);
+              break;
+            }
           }
+          if (best) break;
         }
-        if (best) break;
       }
     }
   }
@@ -104,13 +123,47 @@ function matchService(services: any[], shippingMethod: string): number | null {
   }
 
   if (!best) {
-    console.log(`[UPS] NO MATCH for "${methodLower}" in ${services.length} services:`);
+    console.log(`[UPS] NO EXACT MATCH for "${methodLower}" in ${services.length} services, trying heuristic...`);
     console.log(`[UPS] ALL services (${services.length}):`);
     services.forEach((svc, i) => {
       const desc = (svc.serviceLevelDescription ?? "").toLowerCase();
       const code = svc.serviceLevel ?? "?";
       console.log(`  [${i}] code="${code}" desc="${desc}" days=${svc.businessTransitDays}`);
     });
+
+    // Heuristic: if method contains overnight/next-day keywords, pick the fastest service
+    if (methodLower.includes("overnight") || methodLower.includes("next") || methodLower.includes("1")) {
+      const fastest = services.reduce((prev, curr) =>
+        (parseInt(String(curr.businessTransitDays), 10) < parseInt(String(prev.businessTransitDays), 10)) ? curr : prev
+      );
+      const days = parseInt(String(fastest.businessTransitDays), 10);
+      best = { days, score: 40 };
+      console.log(`[UPS] heuristic: method mentions overnight/next-day, picking fastest (${fastest.serviceLevelDescription}) → ${days} days`);
+    }
+    // Heuristic: if method contains 2-day keywords, pick appropriate service
+    else if (methodLower.includes("2") || methodLower.includes("two")) {
+      const twoDay = services.find(s => {
+        const days = parseInt(String(s.businessTransitDays), 10);
+        return days === 2;
+      }) || services.find(s => {
+        const days = parseInt(String(s.businessTransitDays), 10);
+        return days < 3;
+      });
+      if (twoDay) {
+        const days = parseInt(String(twoDay.businessTransitDays), 10);
+        best = { days, score: 40 };
+        console.log(`[UPS] heuristic: method mentions 2-day, picking 2-day service → ${days} days`);
+      }
+    }
+    // Fallback: if still no match, pick slowest to be safe
+    else if (services.length > 0) {
+      const slowest = services.reduce((prev, curr) =>
+        (parseInt(String(curr.businessTransitDays), 10) > parseInt(String(prev.businessTransitDays), 10)) ? curr : prev
+      );
+      const days = parseInt(String(slowest.businessTransitDays), 10);
+      best = { days, score: 30 };
+      console.log(`[UPS] heuristic: no keyword match, picking slowest service (${slowest.serviceLevelDescription}) → ${days} days`);
+    }
   }
 
   return best?.days ?? null;
@@ -199,14 +252,17 @@ export async function getUPSTransitDays(
 
     const services: any[] = data?.emsResponse?.services ?? [];
     console.log(`[UPS] dest: ${destZip} got ${services.length} services`);
-    if (services.length) console.log("[UPS] sample svc:", JSON.stringify(services[0]));
+    if (services.length) {
+      console.log("[UPS] sample svc:", JSON.stringify(services[0]));
+      console.log("[UPS] ALL services:", JSON.stringify(services.map(s => ({ level: s.serviceLevel, desc: s.serviceLevelDescription, days: s.businessTransitDays }))));
+    }
     if (!services.length) {
       console.log("[UPS] no services — validationList:", JSON.stringify(data?.validationList ?? null));
       console.log("[UPS] originPickList:", JSON.stringify((data?.originPickList ?? []).slice(0, 2)));
       console.log("[UPS] destPickList:", JSON.stringify((data?.destinationPickList ?? []).slice(0, 2)));
       return null;
     }
-    console.log("[UPS] matched", services.length, "services for:", shippingMethod);
+    console.log("[UPS] attempting to match method:", shippingMethod);
 
     const days = matchService(services, shippingMethod);
     if (days != null) {
