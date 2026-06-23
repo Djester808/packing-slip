@@ -29,7 +29,7 @@ export async function seedDefaultRulesIfEmpty() {
   const existingKeywords = new Set(existing.map((r) => r.keyword.toLowerCase()));
   const missing = DEFAULTS.filter((d) => !existingKeywords.has(d.keyword.toLowerCase()));
   if (missing.length > 0) {
-    await prisma.transitRule.createMany({ data: missing, skipDuplicates: true });
+    await prisma.transitRule.createMany({ data: missing });
   }
   seedDone = true;
 }
