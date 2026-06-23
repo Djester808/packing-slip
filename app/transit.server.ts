@@ -58,18 +58,35 @@ export async function getTransitDays(
     return 5;
   }
 
-  // UPS orders MUST use the UPS API - no fallbacks
-  if (destZip) {
+  // Detect if this is a UPS-branded method
+  const isUPSMethod = /\bups\b/i.test(shippingMethodTitle);
+
+  // For UPS methods, MUST use the UPS API - no fallbacks allowed
+  if (isUPSMethod) {
+    if (!destZip) {
+      throw new Error(`UPS method "${shippingMethodTitle}" requires destination zip code`);
+    }
     const upsDate = shipDate ?? nextShipDate().date;
-    console.log(`[Transit] Calling UPS API for zip=${destZip}, method=${shippingMethodTitle}, date=${upsDate.toISOString()}`);
+    console.log(`[Transit] UPS method detected: "${shippingMethodTitle}" → calling UPS API`);
     const upsDays = await getUPSTransitDays(destZip, shippingMethodTitle, upsDate, destState, destCity);
     if (upsDays != null) {
-      console.log(`[Transit] ✓ UPS returned ${upsDays} days for ${shippingMethodTitle}`);
+      console.log(`[Transit] ✓ UPS API matched "${shippingMethodTitle}" → ${upsDays} days`);
       return upsDays;
     }
-    console.error(`[Transit] ✗ UPS API FAILED for ${shippingMethodTitle} to ${destZip} - got null response`);
-    throw new Error(`UPS API failed for ${shippingMethodTitle} to ${destZip}`);
+    console.error(`[Transit] ✗ FAILURE: UPS API could not match "${shippingMethodTitle}" to any service`);
+    throw new Error(`UPS API could not match shipping method: "${shippingMethodTitle}"`);
   }
 
-  throw new Error(`No destination zip provided for ${shippingMethodTitle}`);
+  // For non-UPS methods (custom Shopify shipping, USPS already handled above), fall back to DB/defaults
+  const rules = await prisma.transitRule.findMany({ orderBy: { transitDays: "asc" } });
+  for (const rule of rules) {
+    if (lower.includes(rule.keyword.toLowerCase())) return rule.transitDays;
+  }
+
+  // Last resort: hardcoded defaults for unrecognized methods
+  for (const rule of defaultsSorted) {
+    if (lower.includes(rule.keyword.toLowerCase())) return rule.transitDays;
+  }
+
+  return 5;
 }
