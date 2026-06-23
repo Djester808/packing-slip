@@ -164,8 +164,7 @@ export async function getUPSTransitDays(
         originCityName: "DULUTH",
         destinationCountryCode: "US",
         destinationPostalCode: destZip,
-        ...(destState ? { destinationStateProvince: destState } : {}),
-        // Removed: destinationCityName - zip code alone is sufficient and ambiguous city names cause UPS API errors
+        // Using ZIP ONLY for destination - omit state and city to avoid ambiguity errors
         weight: "1",
         weightUnitOfMeasure: "LBS",
         shipmentContentsValue: "10",
