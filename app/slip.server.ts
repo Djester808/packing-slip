@@ -200,10 +200,19 @@ export async function getInventoryTotals(): Promise<Array<{ title: string; quant
   let totalOrdersProcessed = 0;
 
   while (hasNextPage) {
-    const data = await shopifyGraphQL(query, cursor ? { after: cursor } : {});
-    const orders = (data.data?.orders?.edges ?? []).map((e: any) => e.node);
-    console.log(`[Inventory] Page: ${orders.length} orders`);
-    totalOrdersProcessed += orders.length;
+    try {
+      const data = await shopifyGraphQL(query, cursor ? { after: cursor } : {});
+      if (data.errors) {
+        console.error(`[Inventory] GraphQL errors:`, JSON.stringify(data.errors));
+        break;
+      }
+      const orders = (data.data?.orders?.edges ?? []).map((e: any) => e.node);
+      console.log(`[Inventory] Page: ${orders.length} orders`);
+      totalOrdersProcessed += orders.length;
+    } catch (e) {
+      console.error(`[Inventory] Error fetching orders:`, e);
+      break;
+    }
 
     for (const order of orders) {
       const lineItems = order.lineItems?.edges ?? [];
