@@ -11,14 +11,11 @@ export function isLocalShipping(method: string) {
 }
 
 const ORDER_FIELDS = `
-  id name createdAt note tags displayFulfillmentStatus displayFinancialStatus
-  customer { firstName lastName email }
-  shippingAddress { firstName lastName company address1 address2 city province zip country }
-  shippingLine { title }
+  id name
   lineItems(first: 40) {
     edges { node { title quantity currentQuantity
       product { collections(first: 25) { edges { node { handle title } } } }
-      variant { title sku image { url } product { featuredImage { url } } } } }
+      variant { title } } }
   }
 `;
 
