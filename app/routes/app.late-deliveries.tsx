@@ -24,9 +24,7 @@ const FAST_METHODS_RE = /overnight|next.?day|1.?day|express(?!\s*mail)/i;
 export const loader = async (_: LoaderFunctionArgs) => {
   const lateDeliveries: LateDelivery[] = [];
 
-  const startOf2026 = "2026-01-01T00:00:00Z";
-  const endOf2026 = "2026-12-31T23:59:59Z";
-  const query = `created:>="${startOf2026}" created:<="${endOf2026}" fulfillment_status:fulfilled`;
+  const query = `fulfillment_status:fulfilled`;
 
   let cursor: string | null = null;
   let hasNextPage = true;
@@ -140,7 +138,7 @@ export default function LateDeliveries() {
         <Card>
           <BlockStack gap="400">
             <Text as="h2" variant="headingMd">
-              2026 Late Deliveries
+              Late Deliveries
             </Text>
             <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
               <button
