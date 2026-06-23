@@ -185,7 +185,7 @@ export async function fetchSlipBatch(
 
 export async function getInventoryTotals(): Promise<Array<{ title: string; quantity: number; variantCount: number; variants: string }>> {
   const query = `query getOrders($after: String) {
-    orders(first: 250, after: $after, query: "fulfillment_status:unfulfilled") {
+    orders(first: 250, after: $after, query: "fulfillment_status:unfulfilled status:open") {
       edges { node { ${ORDER_FIELDS} } }
       pageInfo { hasNextPage endCursor }
     }
