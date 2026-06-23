@@ -80,7 +80,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const deliveryDate = slip.weather?.deliveryDate || undefined;
         const maxTempF = slip.weather?.maxTempF || undefined;
         const shippingMethod = slip.order.shippingMethod || undefined;
-        const emailSent = await sendWeatherDelayEmail(slip.order.customerEmail, firstName, orderName, logoUrl, deliveryDate, maxTempF, shippingMethod, settings.delayEmailTemplate);
+        const emailSent = await sendWeatherDelayEmail(slip.order.customerEmail, firstName, orderName, logoUrl, deliveryDate, maxTempF, shippingMethod);
         if (emailSent) {
           console.log(`[Webhook] Recording emailed order: ${orderId}`);
           await prisma.emailedOrder.upsert({

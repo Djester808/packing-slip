@@ -6,13 +6,6 @@ import { Page, Card, Text, BlockStack, TextField, Button, InlineStack, Divider, 
 import prisma from "../db.server";
 import { seedDefaultRulesIfEmpty } from "../transit.server";
 
-const DELAY_EMAIL_PLACEHOLDER = `Hi {customer},
-
-We're holding your order ({order}) for now because the weather or transit time would put your livestock at risk in transit. We'll ship it on the next safe ship date and let you know once it's on the way.
-
-Thanks for your patience,
-Superior Shrimp`;
-
 export const loader = async (_: LoaderFunctionArgs) => {
   await seedDefaultRulesIfEmpty();
   const [rules, settings] = await Promise.all([
@@ -92,15 +85,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ ok: true, intent });
   }
 
-  if (intent === "save-delay-email-template") {
-    await prisma.appSettings.upsert({
-      where: { id: "singleton" },
-      update: { delayEmailTemplate: (form.get("delayEmailTemplate") as string) ?? "" },
-      create: { id: "singleton" },
-    });
-    return json({ ok: true, intent });
-  }
-
   return json({ ok: false, intent });
 };
 
@@ -117,11 +101,6 @@ export default function Settings() {
   const [printLocalOrders, setPrintLocalOrders] = useState(settings.printLocalOrders);
   const [rolloverEnabled, setRolloverEnabled] = useState(settings.rolloverEnabled);
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || "");
-  const [delayEmailTemplate, setDelayEmailTemplate] = useState(settings.delayEmailTemplate || "");
-
-  function copyToClipboard() {
-    navigator.clipboard?.writeText(delayEmailTemplate);
-  }
 
   return (
     <Page title="Settings">
@@ -341,51 +320,6 @@ export default function Settings() {
                 <Button submit>Add</Button>
               </InlineStack>
             </fetcher.Form>
-          </BlockStack>
-        </Card>
-
-        {/* Weather delay email template */}
-        <Card>
-          <BlockStack gap="400">
-            <Text as="h2" variant="headingMd">Weather delay email</Text>
-            <Text as="p" variant="bodySm" tone="subdued">
-              Template for emails sent to customers when orders are held due to weather. Variables: {"{customer}"}, {"{order}"}
-            </Text>
-            <textarea
-              value={delayEmailTemplate}
-              onChange={(e) => setDelayEmailTemplate(e.target.value)}
-              placeholder={DELAY_EMAIL_PLACEHOLDER}
-              rows={12}
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                border: "1px solid #c4cdd5",
-                borderRadius: "8px",
-                fontSize: "14px",
-                fontFamily: "inherit",
-                lineHeight: 1.6,
-                resize: "vertical",
-                boxSizing: "border-box",
-              }}
-            />
-            <InlineStack gap="300" blockAlign="center">
-              <Button
-                loading={isSaving}
-                variant="primary"
-                onClick={() => fetcher.submit(
-                  { intent: "save-delay-email-template", delayEmailTemplate },
-                  { method: "post" },
-                )}
-              >
-                Save template
-              </Button>
-              <Button onClick={copyToClipboard} disabled={!delayEmailTemplate.trim()}>
-                Copy to clipboard
-              </Button>
-              {saved && (fetcher.data as any)?.intent === "save-delay-email-template" && (
-                <Text as="span" variant="bodySm" tone="success">Saved</Text>
-              )}
-            </InlineStack>
           </BlockStack>
         </Card>
 

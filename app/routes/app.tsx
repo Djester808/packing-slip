@@ -22,6 +22,7 @@ export default function App() {
         <Link to="/app" rel="home">Orders</Link>
         <Link to="/app/inventory">Inventory</Link>
         <Link to="/app/late-deliveries">Late Deliveries</Link>
+        <Link to="/app/email-template">Delay email</Link>
         <Link to="/app/settings">Settings</Link>
       </NavMenu>
       {navigation.state === "loading" && (

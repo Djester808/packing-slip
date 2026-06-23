@@ -26,69 +26,8 @@ export async function sendWeatherDelayEmail(
   deliveryDate?: string,
   maxTempF?: number | null,
   shippingMethod?: string,
-  customTemplate?: string,
 ): Promise<boolean> {
   try {
-    // If custom template is provided, use it with variable substitution
-    if (customTemplate?.trim()) {
-      const messageText = customTemplate
-        .replace(/{customer}/g, firstName)
-        .replace(/{order}/g, orderName);
-
-      const logoHtml = logoUrl ? `<div style="margin-bottom:16px;"><img src="${logoUrl}" alt="Superior Shrimp & Aquatics" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.25);display:block;margin:0 auto;" /></div>` : "";
-      const html = `<!-- Superior Shrimp & Aquatics - Weather Delay Email -->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0; padding:0; background-color:#f7f3ee;">
-  <tr>
-    <td align="center" style="padding:24px 12px;">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background-color:#ffffff; border-radius:14px; overflow:hidden; border:1px solid #e8e2da;">
-        <tr>
-          <td style="background-color:#b50707; background-image:linear-gradient(160deg,#b50707 0%,#F40909 100%); padding:32px 36px; text-align:center;">
-            ${logoHtml}
-            <div style="font-family:'Playfair Display',Georgia,serif; font-size:26px; font-weight:700; color:#ffffff; line-height:1.2;">Superior Shrimp & Aquatics</div>
-            <div style="font-family:'DM Sans',Arial,sans-serif; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#ffe5e5; margin-top:8px;">Weather Hold Notice</div>
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:36px 36px 8px 36px; font-family:'DM Sans',Arial,sans-serif;">
-            <div style="font-size:15px; line-height:1.7; color:#6b6060; white-space:pre-wrap;">${messageText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>
-          </td>
-        </tr>
-        <tr>
-          <td style="background-color:#111111; padding:28px 36px; text-align:center;">
-            <p style="font-family:'Playfair Display',Georgia,serif; font-size:16px; font-weight:600; color:#ffffff; margin:0 0 6px 0;">Superior Shrimp & Aquatics</p>
-            <p style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; line-height:1.6; color:#b8aeae; margin:0 0 16px 0;">Thank you for supporting a small, family-run business.</p>
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 16px auto;">
-              <tr>
-                <td style="padding:0 9px;"><a href="https://www.facebook.com/p/Superior-Shrimp-Aquatics-61553268254349/" style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; font-weight:500; color:#ff8a8a; text-decoration:none;">Facebook</a></td>
-                <td style="color:#444444; font-size:12px;">|</td>
-                <td style="padding:0 9px;"><a href="https://www.instagram.com/superior_shrimp_aquatics/" style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; font-weight:500; color:#ff8a8a; text-decoration:none;">Instagram</a></td>
-                <td style="color:#444444; font-size:12px;">|</td>
-                <td style="padding:0 9px;"><a href="https://www.tiktok.com/@superiorshrimp" style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; font-weight:500; color:#ff8a8a; text-decoration:underline;">TikTok</a></td>
-              </tr>
-            </table>
-            <p style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; line-height:1.7; color:#b8aeae; margin:0 0 4px 0;">
-              <a href="https://www.superiorshrimpaquatics.com/pages/shipping-info-practices" style="color:#ff8a8a; text-decoration:underline;">Shipping Info & Practices</a>
-            </p>
-            <p style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; line-height:1.7; color:#b8aeae; margin:0;">Questions? <a href="mailto:support@superiorshrimpaquatics.com" style="color:#ff8a8a; text-decoration:underline;">support@superiorshrimpaquatics.com</a></p>
-          </td>
-        </tr>
-      </table>
-    </td>
-  </tr>
-</table>`;
-
-      await makeTransporter().sendMail({
-        from: process.env.OUTLOOK_EMAIL,
-        to: email,
-        subject: `Your order ${orderName} — Weather delay`,
-        html,
-      });
-
-      console.log(`[Webhook] Weather delay email sent to ${email} for order ${orderName}`);
-      return true;
-    }
-
-    // Fallback to default template if no custom template
     const logoHtml = logoUrl ? `<div style="margin-bottom:16px;"><img src="${logoUrl}" alt="Superior Shrimp & Aquatics" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.25);display:block;margin:0 auto;" /></div>` : "";
     const deliveryHtml = deliveryDate ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Estimated Delivery:</strong> ${deliveryDate}</p>` : "";
     const tempHtml = maxTempF ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Estimated Temp:</strong> ${Math.round(maxTempF)}°F</p>` : "";
