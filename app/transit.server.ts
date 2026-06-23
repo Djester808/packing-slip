@@ -58,31 +58,18 @@ export async function getTransitDays(
     return 5;
   }
 
-  // Try UPS Time in Transit API
+  // UPS orders MUST use the UPS API - no fallbacks
   if (destZip) {
     const upsDate = shipDate ?? nextShipDate().date;
-    console.log(`[Transit] Calling UPS API for zip=${destZip}, method=${shippingMethodTitle}`);
-    const upsDays = await getUPSTransitDays(destZip, shippingMethodTitle, upsDate, destState, destCity).catch((e) => {
-      console.error(`[Transit] UPS API failed:`, e.message);
-      return null;
-    });
+    console.log(`[Transit] Calling UPS API for zip=${destZip}, method=${shippingMethodTitle}, date=${upsDate.toISOString()}`);
+    const upsDays = await getUPSTransitDays(destZip, shippingMethodTitle, upsDate, destState, destCity);
     if (upsDays != null) {
-      console.log(`[Transit] UPS returned ${upsDays} days for ${shippingMethodTitle}`);
+      console.log(`[Transit] ✓ UPS returned ${upsDays} days for ${shippingMethodTitle}`);
       return upsDays;
     }
-    console.log(`[Transit] UPS returned null, using defaults`);
+    console.error(`[Transit] ✗ UPS API FAILED for ${shippingMethodTitle} to ${destZip} - got null response`);
+    throw new Error(`UPS API failed for ${shippingMethodTitle} to ${destZip}`);
   }
 
-  // Fall back to DB rules (user-customizable)
-  const rules = await prisma.transitRule.findMany({ orderBy: { transitDays: "asc" } });
-  for (const rule of rules) {
-    if (lower.includes(rule.keyword.toLowerCase())) return rule.transitDays;
-  }
-
-  // Fall back to hardcoded defaults
-  for (const rule of defaultsSorted) {
-    if (lower.includes(rule.keyword.toLowerCase())) return rule.transitDays;
-  }
-
-  return 5;
+  throw new Error(`No destination zip provided for ${shippingMethodTitle}`);
 }
