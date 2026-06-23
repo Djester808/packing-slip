@@ -197,10 +197,13 @@ export async function getInventoryTotals(): Promise<Array<{ title: string; quant
   const itemMap = new Map<string, { quantity: number; variants: Set<string> }>();
   let cursor: string | null = null;
   let hasNextPage = true;
+  let totalOrdersProcessed = 0;
 
   while (hasNextPage) {
     const data = await shopifyGraphQL(query, cursor ? { after: cursor } : {});
     const orders = (data.data?.orders?.edges ?? []).map((e: any) => e.node);
+    console.log(`[Inventory] Page: ${orders.length} orders`);
+    totalOrdersProcessed += orders.length;
 
     for (const order of orders) {
       const lineItems = order.lineItems?.edges ?? [];
@@ -227,7 +230,8 @@ export async function getInventoryTotals(): Promise<Array<{ title: string; quant
     cursor = data.data?.orders?.pageInfo?.endCursor ?? null;
   }
 
-  return Array.from(itemMap.entries())
+  console.log(`[Inventory] Total orders processed: ${totalOrdersProcessed}, Items found: ${itemMap.size}`);
+  const result = Array.from(itemMap.entries())
     .map(([title, data]) => ({
       title,
       quantity: data.quantity,
@@ -235,4 +239,6 @@ export async function getInventoryTotals(): Promise<Array<{ title: string; quant
       variants: Array.from(data.variants).join(", "),
     }))
     .sort((a, b) => b.quantity - a.quantity);
+  console.log(`[Inventory] Returning ${result.length} product lines`);
+  return result;
 }
