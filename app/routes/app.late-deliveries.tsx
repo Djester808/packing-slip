@@ -17,40 +17,40 @@ interface LateDelivery {
   daysLate: number;
 }
 
-const FAST_METHODS_RE = /overnight|next.?day|1.?day|2.?day|2nd day|two.?day/i;
+// Match: overnight, next day, 1-day, 2-day, 2nd day, express, priority mail express, etc.
+const FAST_METHODS_RE = /overnight|next.?day|1.?day|2.?d|2nd|two.?day|express|priority mail express/i;
 
 export const loader = async (_: LoaderFunctionArgs) => {
   const lateDeliveries: LateDelivery[] = [];
 
   const startOf2026 = "2026-01-01T00:00:00Z";
   const endOf2026 = "2026-12-31T23:59:59Z";
-  const query = `created:>="${startOf2026}" created:<="${endOf2026}" fulfillment_status:fulfilled status:closed`;
+  const query = `created:>="${startOf2026}" created:<="${endOf2026}" fulfillment_status:fulfilled`;
 
   let cursor: string | null = null;
   let hasNextPage = true;
 
   while (hasNextPage) {
     const data = await shopifyGraphQL(
-      `query($after: String) {
-        orders(first: 250, after: $after, query: "${query}", sortKey: CREATED_AT, reverse: true) {
+      `query($after: String, $query: String!) {
+        orders(first: 250, after: $after, query: $query, sortKey: CREATED_AT, reverse: true) {
           pageInfo { hasNextPage endCursor }
           edges { node {
             id name createdAt
             customer { firstName lastName }
             shippingAddress { zip city province }
             shippingLine { title }
-            fulfillments(first: 1, sortKey: CREATED_AT) {
-              edges { node {
-                inTransitAt deliveredAt
-              } }
+            fulfillments(first: 100) {
+              id status createdAt updatedAt inTransitAt deliveredAt
             }
           } }
         }
       }`,
-      { after: cursor }
+      { after: cursor, query }
     );
 
     const orders = data.data?.orders?.edges ?? [];
+    totalOrders += orders.length;
 
     for (const edge of orders) {
       const order = edge.node;
@@ -58,8 +58,10 @@ export const loader = async (_: LoaderFunctionArgs) => {
 
       if (!FAST_METHODS_RE.test(shippingMethod)) continue;
 
-      const fulfillment = order.fulfillments?.edges?.[0]?.node;
-      if (!fulfillment?.inTransitAt || !fulfillment?.deliveredAt) continue;
+      const fulfillments = order.fulfillments ?? [];
+      const fulfillment = fulfillments.find((f: any) => f.inTransitAt && f.deliveredAt);
+
+      if (!fulfillment) continue;
 
       const pickedUpAt = new Date(fulfillment.inTransitAt);
       const deliveredAt = new Date(fulfillment.deliveredAt);
