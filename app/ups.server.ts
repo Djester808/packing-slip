@@ -148,7 +148,23 @@ export async function getUPSTransitDays(
   const token = await getToken();
   if (!token) return null;
 
-  try {
+  const makeRequest = async (destCity?: string): Promise<any> => {
+    const payload = {
+      originCountryCode: "US",
+      originPostalCode: originZip,
+      originStateProvince: "MN",
+      originCityName: "DULUTH",
+      destinationCountryCode: "US",
+      destinationPostalCode: destZip,
+      ...(destCity ? { destinationCityName: destCity } : {}),
+      weight: "1",
+      weightUnitOfMeasure: "LBS",
+      shipmentContentsValue: "10",
+      shipmentContentsCurrencyCode: "USD",
+      billType: "03",
+      shipDate: shipDateStr,
+      numberOfPackages: "1",
+    };
     const res = await fetch(UPS_TRANSIT_URL, {
       method: "POST",
       headers: {
@@ -157,33 +173,28 @@ export async function getUPSTransitDays(
         transId: crypto.randomUUID(),
         transactionSrc: "PackSlip",
       },
-      body: (() => {
-        const payload = {
-          originCountryCode: "US",
-          originPostalCode: originZip,
-          originStateProvince: "MN",
-          originCityName: "DULUTH",
-          destinationCountryCode: "US",
-          destinationPostalCode: destZip,
-          // Using ZIP ONLY for destination - omit state and city to avoid ambiguity errors
-          weight: "1",
-          weightUnitOfMeasure: "LBS",
-          shipmentContentsValue: "10",
-          shipmentContentsCurrencyCode: "USD",
-          billType: "03",
-          shipDate: shipDateStr,
-          numberOfPackages: "1",
-        };
-        console.log(`[UPS] Request for ${destZip}: ${JSON.stringify(Object.keys(payload))}`);
-        return JSON.stringify(payload);
-      })(),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const text = await res.text();
       console.error("[UPS] transit failed", res.status, text);
       return null;
     }
-    const data = await res.json() as any;
+    return await res.json() as any;
+  };
+
+  try {
+    let data = await makeRequest();
+
+    // If destination is ambiguous, retry with first suggested city
+    if (data?.destinationAmbiguous && data?.destinationPickList?.length > 0) {
+      const suggestedCity = data.destinationPickList[0].city;
+      console.log(`[UPS] destination ambiguous for ${destZip}, retrying with city: ${suggestedCity}`);
+      data = await makeRequest(suggestedCity);
+    }
+
+    if (!data) return null;
+
     console.log("[UPS] transit response keys", JSON.stringify(Object.keys(data ?? {})));
 
     const services: any[] = data?.emsResponse?.services ?? [];
