@@ -56,7 +56,6 @@ function matchService(services: any[], shippingMethod: string): number | null {
 
     if (overlap > 0 && (!best || overlap > best.score)) {
       best = { days: parseInt(String(svc.businessTransitDays), 10), score: overlap };
-      console.log(`[UPS] candidate: "${desc}" → ${svc.businessTransitDays} days (score ${overlap})`);
     }
   }
 
