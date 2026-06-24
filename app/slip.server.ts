@@ -14,7 +14,7 @@ const ORDER_FIELDS = `
   id name
   lineItems(first: 40) {
     edges { node { title quantity currentQuantity
-      product { collections(first: 25) { edges { node { handle title } } } }
+      product { title collections(first: 25) { edges { node { handle title } } } }
       variant { title } } }
   }
 `;
@@ -248,23 +248,24 @@ export async function getInventoryTotals(): Promise<Array<{ title: string; quant
             continue;
           }
 
+          const productTitle = item.product?.title ?? item.title;
           const variant = item.variant?.title && item.variant.title !== "Default Title" ? item.variant.title : null;
           const collections = lineItemCollections(item);
           const isLivestock = isLivestockCollection(collections);
-          const total = getPackBadgeTotal(variant, qty, item.title, isLivestock);
+          const total = getPackBadgeTotal(variant, qty, productTitle, isLivestock);
 
-          console.log(`[Inventory] Calculated total=${total} for "${item.title}" (isLivestock=${isLivestock})`);
+          console.log(`[Inventory] Calculated total=${total} for "${productTitle}" (isLivestock=${isLivestock})`);
 
           const variantKey = variant || "(no variant)";
 
-          if (itemMap.has(item.title)) {
-            const existing = itemMap.get(item.title)!;
+          if (itemMap.has(productTitle)) {
+            const existing = itemMap.get(productTitle)!;
             existing.quantity += total;
             existing.variants.add(variantKey);
-            console.log(`[Inventory] Updated "${item.title}": quantity now ${existing.quantity}`);
+            console.log(`[Inventory] Updated "${productTitle}": quantity now ${existing.quantity}`);
           } else {
-            itemMap.set(item.title, { quantity: total, variants: new Set([variantKey]) });
-            console.log(`[Inventory] Added new item "${item.title}": quantity ${total}`);
+            itemMap.set(productTitle, { quantity: total, variants: new Set([variantKey]) });
+            console.log(`[Inventory] Added new item "${productTitle}": quantity ${total}`);
           }
         }
       }
