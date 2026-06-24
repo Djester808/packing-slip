@@ -12,9 +12,6 @@ export function isLocalShipping(method: string) {
 
 const ORDER_FIELDS = `
   id name
-  fulfillments(first: 100) {
-    id deliveredAt
-  }
   lineItems(first: 40) {
     edges { node { title quantity currentQuantity
       product { title collections(first: 25) { edges { node { handle title } } } }
@@ -187,30 +184,13 @@ export async function fetchSlipBatch(
 }
 
 export async function getInventoryTotals(weekOffset = 0): Promise<Array<{ title: string; quantity: number; variantCount: number; variants: string }>> {
-  console.log(`[Inventory] getInventoryTotals called with weekOffset=${weekOffset}`);
+  console.log("[Inventory] getInventoryTotals called");
 
-  // Calculate date range for shipped orders (Sunday-Wednesday of target week)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dayOfWeek = today.getDay();
+  // TODO: implement week filtering when API supports historical shipped order queries
 
-  let daysToSubtract = dayOfWeek;
-  if (weekOffset === -1) daysToSubtract += 7; // Previous week
-
-  const weekStart = new Date(today);
-  weekStart.setDate(today.getDate() - daysToSubtract);
-
-  const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 3); // Through Wednesday
-
-  const startStr = weekStart.toISOString().split('T')[0];
-  const endStr = weekEnd.toISOString().split('T')[0];
-
-  console.log(`[Inventory] Week range: ${startStr} to ${endStr}`);
-
-  // Query fulfilled orders, then filter by delivered date for the selected week
+  // Query unfulfilled orders (current inventory), no date filtering
   const query = `query getOrders($after: String) {
-    orders(first: 250, after: $after, query: "fulfillment_status:fulfilled") {
+    orders(first: 250, after: $after, query: "fulfillment_status:unfulfilled status:open") {
       edges { node { ${ORDER_FIELDS} } }
       pageInfo { hasNextPage endCursor }
     }
@@ -252,22 +232,9 @@ export async function getInventoryTotals(weekOffset = 0): Promise<Array<{ title:
       }
 
       for (const order of orders) {
-        // Filter by delivered date within week range
-        const fulfillments = order.fulfillments ?? [];
-        const hasDeliveryInWeek = fulfillments.some((f: any) => {
-          if (!f.deliveredAt) return false;
-          const deliveredDate = new Date(f.deliveredAt).toISOString().split('T')[0];
-          return deliveredDate >= startStr && deliveredDate <= endStr;
-        });
-
-        if (!hasDeliveryInWeek) {
-          console.log(`[Inventory] Skipping ${order.name} - no delivery in week range`);
-          continue;
-        }
-
         totalOrdersProcessed++;
         const lineItems = order.lineItems?.edges ?? [];
-        console.log(`[Inventory] Order ${order.name}: ${lineItems.length} line items (delivered in range)`);
+        console.log(`[Inventory] Order ${order.name}: ${lineItems.length} line items`);
 
         for (const { node: item } of lineItems) {
           totalItemsProcessed++;
