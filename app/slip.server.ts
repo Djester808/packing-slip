@@ -183,10 +183,32 @@ export async function fetchSlipBatch(
   return results.filter(Boolean);
 }
 
-export async function getInventoryTotals(): Promise<Array<{ title: string; quantity: number; variantCount: number; variants: string }>> {
-  console.log("[Inventory] DEPLOYED_VERSION_2025_06_23 - getInventoryTotals called");
+export async function getInventoryTotals(weekOffset = 0): Promise<Array<{ title: string; quantity: number; variantCount: number; variants: string }>> {
+  console.log(`[Inventory] getInventoryTotals called with weekOffset=${weekOffset}`);
+
+  // Calculate date range for the week
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dayOfWeek = today.getDay();
+
+  // Calculate Sunday of the target week
+  const targetWeekStart = new Date(today);
+  targetWeekStart.setDate(today.getDate() - dayOfWeek + weekOffset * 7);
+
+  // Wednesday of that week
+  const targetWeekEnd = new Date(targetWeekStart);
+  targetWeekEnd.setDate(targetWeekStart.getDate() + 4);
+  targetWeekEnd.setHours(23, 59, 59, 999);
+
+  const startStr = targetWeekStart.toISOString().split('T')[0];
+  const endStr = targetWeekEnd.toISOString().split('T')[0];
+
+  console.log(`[Inventory] Date range: ${startStr} to ${endStr}`);
+
+  const baseQuery = `fulfillment_status:unfulfilled status:open created>="${startStr}" created<="${endStr}"`;
+
   const query = `query getOrders($after: String) {
-    orders(first: 250, after: $after, query: "fulfillment_status:unfulfilled status:open") {
+    orders(first: 250, after: $after, query: "${baseQuery}") {
       edges { node { ${ORDER_FIELDS} } }
       pageInfo { hasNextPage endCursor }
     }
