@@ -192,20 +192,22 @@ export async function getInventoryTotals(weekOffset = 0): Promise<Array<{ title:
   const dayOfWeek = today.getDay();
 
   // Calculate Sunday of the target week
+  let daysToSubtract = dayOfWeek;
+  if (weekOffset === -1) daysToSubtract += 7; // Go to Sunday of previous week
+
   const targetWeekStart = new Date(today);
-  targetWeekStart.setDate(today.getDate() - dayOfWeek + weekOffset * 7);
+  targetWeekStart.setDate(today.getDate() - daysToSubtract);
 
   // Wednesday of that week
   const targetWeekEnd = new Date(targetWeekStart);
-  targetWeekEnd.setDate(targetWeekStart.getDate() + 4);
-  targetWeekEnd.setHours(23, 59, 59, 999);
+  targetWeekEnd.setDate(targetWeekStart.getDate() + 3);
 
   const startStr = targetWeekStart.toISOString().split('T')[0];
   const endStr = targetWeekEnd.toISOString().split('T')[0];
 
   console.log(`[Inventory] Date range: ${startStr} to ${endStr}`);
 
-  const baseQuery = `fulfillment_status:unfulfilled status:open created>="${startStr}" created<="${endStr}"`;
+  const baseQuery = `fulfillment_status:unfulfilled status:open created:>=${startStr} created:<=${endStr}`;
 
   const query = `query getOrders($after: String) {
     orders(first: 250, after: $after, query: "${baseQuery}") {
