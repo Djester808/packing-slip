@@ -10,7 +10,7 @@ export function isLocalShipping(method: string) {
     /^\d+\s+\S.*\b(rd|st|ave|blvd|dr|ln|way|ct|pl|hwy|pkwy|drive|street|avenue|road|lane|court)\b/i.test(method);
 }
 
-const ORDER_FIELDS = `
+const SLIP_ORDER_FIELDS = `
   id name createdAt
   customer { firstName lastName }
   shippingAddress { city province zip country }
@@ -20,6 +20,15 @@ const ORDER_FIELDS = `
     edges { node { title quantity currentQuantity
       product { title collections(first: 25) { edges { node { handle title } } } }
       variant { title image { url } product { featuredImage { url } } } } }
+  }
+`;
+
+const INVENTORY_ORDER_FIELDS = `
+  id name
+  lineItems(first: 40) {
+    edges { node { title quantity currentQuantity
+      product { title collections(first: 25) { edges { node { handle title } } } }
+      variant { title } } }
   }
 `;
 
@@ -139,7 +148,7 @@ async function buildSlipFromOrder(
 export async function fetchSlip(orderId: string, settings: { dontShipAbove: number; icePackAbove: number; dontShipBelow: number; cautionBelow: number }) {
   const gid = `gid://shopify/Order/${orderId}`;
   const data = await shopifyGraphQL(
-    `query getOrder($id: ID!) { order(id: $id) { ${ORDER_FIELDS} } }`,
+    `query getOrder($id: ID!) { order(id: $id) { ${SLIP_ORDER_FIELDS} } }`,
     { id: gid },
   );
   const o = data.data?.order;
@@ -156,7 +165,7 @@ export async function fetchSlipBatch(
 
   const gids = orderIds.map((id) => `gid://shopify/Order/${id}`);
   const data = await shopifyGraphQL(
-    `query getOrders($ids: [ID!]!) { nodes(ids: $ids) { ... on Order { ${ORDER_FIELDS} } } }`,
+    `query getOrders($ids: [ID!]!) { nodes(ids: $ids) { ... on Order { ${SLIP_ORDER_FIELDS} } } }`,
     { ids: gids },
   );
 
@@ -195,7 +204,7 @@ export async function getInventoryTotals(weekOffset = 0): Promise<Array<{ title:
   // Query unfulfilled orders (current inventory), no date filtering
   const query = `query getOrders($after: String) {
     orders(first: 250, after: $after, query: "fulfillment_status:unfulfilled status:open") {
-      edges { node { ${ORDER_FIELDS} } }
+      edges { node { ${INVENTORY_ORDER_FIELDS} } }
       pageInfo { hasNextPage endCursor }
     }
   }`;
