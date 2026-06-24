@@ -208,9 +208,9 @@ export async function getInventoryTotals(weekOffset = 0): Promise<Array<{ title:
 
   console.log(`[Inventory] Week range: ${startStr} to ${endStr}`);
 
-  // Query ALL unfulfilled orders, then filter by delivered date client-side
+  // Query fulfilled orders, then filter by delivered date for the selected week
   const query = `query getOrders($after: String) {
-    orders(first: 250, after: $after, query: "fulfillment_status:unfulfilled status:open") {
+    orders(first: 250, after: $after, query: "fulfillment_status:fulfilled") {
       edges { node { ${ORDER_FIELDS} } }
       pageInfo { hasNextPage endCursor }
     }
