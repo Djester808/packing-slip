@@ -184,33 +184,13 @@ export async function fetchSlipBatch(
 }
 
 export async function getInventoryTotals(weekOffset = 0): Promise<Array<{ title: string; quantity: number; variantCount: number; variants: string }>> {
-  console.log(`[Inventory] getInventoryTotals called with weekOffset=${weekOffset}`);
+  console.log("[Inventory] getInventoryTotals called");
 
-  // Calculate date range for the week
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const dayOfWeek = today.getDay();
-
-  // Calculate Sunday of the target week
-  let daysToSubtract = dayOfWeek;
-  if (weekOffset === -1) daysToSubtract += 7; // Go to Sunday of previous week
-
-  const targetWeekStart = new Date(today);
-  targetWeekStart.setDate(today.getDate() - daysToSubtract);
-
-  // Wednesday of that week
-  const targetWeekEnd = new Date(targetWeekStart);
-  targetWeekEnd.setDate(targetWeekStart.getDate() + 3);
-
-  const startStr = targetWeekStart.toISOString().split('T')[0];
-  const endStr = targetWeekEnd.toISOString().split('T')[0];
-
-  console.log(`[Inventory] Date range: ${startStr} to ${endStr}`);
-
-  const baseQuery = `fulfillment_status:unfulfilled status:open created:>=${startStr} created:<=${endStr}`;
+  // For now, ignore weekOffset - just return current unfulfilled orders
+  // TODO: clarify what "previous week" filter should actually mean (created date? fulfilled date? shipped date?)
 
   const query = `query getOrders($after: String) {
-    orders(first: 250, after: $after, query: "${baseQuery}") {
+    orders(first: 250, after: $after, query: "fulfillment_status:unfulfilled status:open") {
       edges { node { ${ORDER_FIELDS} } }
       pageInfo { hasNextPage endCursor }
     }
