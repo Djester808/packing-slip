@@ -82,14 +82,14 @@ export async function sendWeatherDelayEmail(
                 <td width="40" valign="top" style="padding-top:2px;">
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="28" height="28" align="center" valign="middle" style="background-color:#F40909; border-radius:50%; font-family:'DM Sans',Arial,sans-serif; font-size:13px; font-weight:700; color:#ffffff; line-height:28px;">3</td></tr></table>
                 </td>
-                <td valign="top" style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.6; color:#6b6060;">Choose one convenient to you and copy down the <strong style="color:#111111;">full street address</strong>.</td>
+                <td valign="top" style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.6; color:#6b6060;"><strong style="color:#111111;">Choose only an official UPS Store location</strong> — not CVS, Michaels, Walgreens, or other retailers. Copy down the <strong style="color:#111111;">full street address</strong>.</td>
               </tr>
             </table>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px 0;">
               <tr>
                 <td style="background-color:#f7f3ee; border:1px solid #e8e2da; border-radius:12px; padding:22px 22px;">
-                  <p style="font-family:'Playfair Display',Georgia,serif; font-size:17px; font-weight:600; color:#1e1a1a; margin:0 0 8px 0;">Reply with your pickup address</p>
-                  <p style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.65; color:#6b6060; margin:0 0 16px 0;">Once you have it, just reply to this email with the full Access Point street address and we will get your order shipped there. Prefer to wait? We can hold your order and reevaluate shipping next week instead.</p>
+                  <p style="font-family:'Playfair Display',Georgia,serif; font-size:17px; font-weight:600; color:#1e1a1a; margin:0 0 8px 0;">Reply with your pickup address and phone number</p>
+                  <p style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.65; color:#6b6060; margin:0 0 16px 0;">Once you have it, reply to this email with the full UPS Store street address and your phone number. We will get your order shipped there. Prefer to wait? We can hold your order and reevaluate shipping next week instead.</p>
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                       <td align="center" style="background-color:#F40909; border-radius:8px;">
