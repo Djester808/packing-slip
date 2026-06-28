@@ -70,8 +70,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ status: "order_not_found" });
     }
 
-    // Send email if there's a danger alert
-    if (slip.alert && slip.alert.level === "danger") {
+    // Send email if there's a danger alert (but not for reships/access points—they ship regardless)
+    if (slip.alert && slip.alert.level === "danger" && !slip.order.isReship && !slip.order.isAccessPoint) {
       console.log(`[Webhook] Order ${orderName} has weather alert: ${slip.alert.headline}`);
 
       if (slip.order.customerEmail) {
