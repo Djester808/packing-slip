@@ -34,92 +34,40 @@ export async function sendWeatherDelayEmail(
     const speedHtml = shippingMethod ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Shipping Method:</strong> ${shippingMethod}</p>` : "";
 
     const html = `<!-- Superior Shrimp & Aquatics - Weather Delay Email -->
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0; padding:0; background-color:#f7f3ee;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0; padding:0; background-color:#f5f5f5;">
   <tr>
     <td align="center" style="padding:24px 12px;">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background-color:#ffffff; border-radius:14px; overflow:hidden; border:1px solid #e8e2da;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background-color:#ffffff; border-radius:8px; overflow:hidden;">
         <tr>
-          <td style="background-color:#b50707; background-image:linear-gradient(160deg,#b50707 0%,#F40909 100%); padding:32px 36px; text-align:center;">
+          <td style="padding:32px 36px; background-color:#fafafa; border-bottom:2px solid #e8e2da;">
             ${logoHtml}
-            <div style="font-family:'Playfair Display',Georgia,serif; font-size:26px; font-weight:700; color:#ffffff; line-height:1.2;">Superior Shrimp & Aquatics</div>
-            <div style="font-family:'DM Sans',Arial,sans-serif; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:#ffe5e5; margin-top:8px;">Weather Hold Notice</div>
+            <div style="font-family:Arial, sans-serif; font-size:24px; font-weight:bold; color:#1a1a1a; margin-top:12px;">Heat Advisory: Shipping Delays This Week</div>
           </td>
         </tr>
         <tr>
-          <td style="padding:36px 36px 8px 36px; font-family:'DM Sans',Arial,sans-serif;">
-            <p style="font-family:'Playfair Display',Georgia,serif; font-size:22px; font-weight:600; color:#1e1a1a; margin:0 0 18px 0;">Thank you for your order, ${firstName}!</p>
-            <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">Currently, the temperatures in your area are above our safety threshold for shipping live animals. We don't want your shipment sitting on a hot truck all day, so to get it out to you this week, we would need to route it to a <strong style="color:#111111;">UPS Access Point</strong> near you for pickup.</p>
-            ${deliveryHtml}
-            ${tempHtml}
-            ${speedHtml}
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px 0;">
-              <tr>
-                <td style="background-color:#fff0f0; border-left:4px solid #F40909; border-radius:10px; padding:14px 18px;">
-                  <p style="font-size:14px; line-height:1.6; color:#1e1a1a; margin:0;">This affects order <strong style="color:#b50707;">${orderName}</strong>. Live animals only ship when conditions are safe, so we are pausing it until we hear from you.</p>
-                </td>
-              </tr>
-            </table>
-            <p style="font-size:12px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase; color:#b50707; margin:0 0 4px 0;">What To Do</p>
-            <p style="font-family:'Playfair Display',Georgia,serif; font-size:19px; font-weight:600; color:#1e1a1a; margin:0 0 18px 0;">Find a UPS Access Point Near You</p>
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 10px 0;">
-              <tr>
-                <td width="40" valign="top" style="padding-top:2px;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="28" height="28" align="center" valign="middle" style="background-color:#F40909; border-radius:50%; font-family:'DM Sans',Arial,sans-serif; font-size:13px; font-weight:700; color:#ffffff; line-height:28px;">1</td></tr></table>
-                </td>
-                <td valign="top" style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.6; color:#6b6060;">Visit <a href="https://www.ups.com/dropoff" style="color:#b50707; text-decoration:underline;">ups.com</a> and go to the <strong style="color:#111111;">Find Locations</strong> page, or search "UPS Access Point near me."</td>
-              </tr>
-            </table>
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 10px 0;">
-              <tr>
-                <td width="40" valign="top" style="padding-top:2px;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="28" height="28" align="center" valign="middle" style="background-color:#F40909; border-radius:50%; font-family:'DM Sans',Arial,sans-serif; font-size:13px; font-weight:700; color:#ffffff; line-height:28px;">2</td></tr></table>
-                </td>
-                <td valign="top" style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.6; color:#6b6060;">Enter your ZIP code or address.</td>
-              </tr>
-            </table>
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">
-              <tr>
-                <td width="40" valign="top" style="padding-top:2px;">
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="28" height="28" align="center" valign="middle" style="background-color:#F40909; border-radius:50%; font-family:'DM Sans',Arial,sans-serif; font-size:13px; font-weight:700; color:#ffffff; line-height:28px;">3</td></tr></table>
-                </td>
-                <td valign="top" style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.6; color:#6b6060;"><strong style="color:#111111;">Choose only an official UPS Store location</strong> — not CVS, Michaels, Walgreens, or other retailers. Copy down the <strong style="color:#111111;">full street address</strong>.</td>
-              </tr>
-            </table>
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px 0;">
-              <tr>
-                <td style="background-color:#f7f3ee; border:1px solid #e8e2da; border-radius:12px; padding:22px 22px;">
-                  <p style="font-family:'Playfair Display',Georgia,serif; font-size:17px; font-weight:600; color:#1e1a1a; margin:0 0 8px 0;">Reply with your pickup address and phone number</p>
-                  <p style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.65; color:#6b6060; margin:0 0 16px 0;">Once you have it, reply to this email with the full UPS Store street address and your phone number. We will get your order shipped there. Prefer to wait? We can hold your order and reevaluate shipping next week instead.</p>
-                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
-                    <tr>
-                      <td align="center" style="background-color:#F40909; border-radius:8px;">
-                        <a href="mailto:support@superiorshrimpaquatics.com?subject=Access%20Point%20Address%20for%20Order%20${orderName}" style="display:inline-block; font-family:'DM Sans',Arial,sans-serif; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; padding:13px 28px;">Reply With My Address</a>
-                      </td>
-                    </tr>
-                  </table>
-                  <p style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; line-height:1.5; color:#80666b; margin:14px 0 0 0;">Please let us know as soon as you can, otherwise your order may be delayed.</p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-        <tr>
-          <td style="background-color:#111111; padding:28px 36px; text-align:center;">
-            <p style="font-family:'Playfair Display',Georgia,serif; font-size:16px; font-weight:600; color:#ffffff; margin:0 0 6px 0;">Superior Shrimp & Aquatics</p>
-            <p style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; line-height:1.6; color:#b8aeae; margin:0 0 16px 0;">Thank you for supporting a small, family-run business.</p>
-            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 16px auto;">
-              <tr>
-                <td style="padding:0 9px;"><a href="https://www.facebook.com/p/Superior-Shrimp-Aquatics-61553268254349/" style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; font-weight:500; color:#ff8a8a; text-decoration:none;">Facebook</a></td>
-                <td style="color:#444444; font-size:12px;">|</td>
-                <td style="padding:0 9px;"><a href="https://www.instagram.com/superior_shrimp_aquatics/" style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; font-weight:500; color:#ff8a8a; text-decoration:none;">Instagram</a></td>
-                <td style="color:#444444; font-size:12px;">|</td>
-                <td style="padding:0 9px;"><a href="https://www.tiktok.com/@superiorshrimp" style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; font-weight:500; color:#ff8a8a; text-decoration:underline;">TikTok</a></td>
-              </tr>
-            </table>
-            <p style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; line-height:1.7; color:#b8aeae; margin:0 0 4px 0;">
-              <a href="https://www.superiorshrimpaquatics.com/pages/shipping-info-practices" style="color:#ff8a8a; text-decoration:underline;">Shipping Info & Practices</a>
-            </p>
-            <p style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; line-height:1.7; color:#b8aeae; margin:0;">Questions? <a href="mailto:support@superiorshrimpaquatics.com" style="color:#ff8a8a; text-decoration:underline;">support@superiorshrimpaquatics.com</a></p>
+          <td style="padding:36px 36px; font-family:Arial, sans-serif; line-height:1.6; color:#333333;">
+            <p style="font-size:16px; margin:0 0 20px 0;">Hi ${firstName},</p>
+            <p style="font-size:15px; margin:0 0 18px 0;">A heat wave is moving across much of the country, and we're holding orders to protect your livestock. High temperatures during transit are one of the biggest risks to live shrimp and fish, and shipping into dangerous heat is not worth the loss.</p>
+
+            <div style="background-color:#f0f0f0; border-left:4px solid #666; padding:16px; margin:20px 0; border-radius:4px;">
+              <p style="font-size:15px; font-weight:bold; color:#1a1a1a; margin:0 0 12px 0;">What this means for you:</p>
+              <ul style="font-size:14px; margin:0; padding-left:20px; color:#333;">
+                <li style="margin-bottom:8px;">Many orders will be delayed until conditions improve in transit zones</li>
+                <li style="margin-bottom:8px;">We process in the order received (FIFO) once it's safe to ship</li>
+                <li style="margin-bottom:8px;">Orders ship with cold packs as conditions require</li>
+                <li>You'll get tracking as soon as your order goes out</li>
+              </ul>
+            </div>
+
+            <p style="font-size:15px; margin:20px 0;">We watch the forecasts daily and ship the moment the route clears. Holding your order is a deliberate call to make sure your animals arrive alive and healthy.</p>
+
+            <p style="font-size:15px; margin:20px 0;">This affects order <strong>${orderName}</strong>.</p>
+
+            <p style="font-size:15px; margin:0;">Thanks for trusting us with your livestock. Questions about a specific order? Reply here or email us.</p>
+
+            <p style="font-size:16px; font-weight:bold; color:#1a1a1a; margin:24px 0 0 0;">John - Owner<br/>Superior Shrimp & Aquatics</p>
+
+            <p style="font-size:13px; color:#666; margin:16px 0 0 0;"><a href="https://www.superiorshrimpaquatics.com" style="color:#0066cc; text-decoration:none;">www.superiorshrimpaquatics.com</a></p>
           </td>
         </tr>
       </table>
