@@ -178,7 +178,7 @@ export default function Index() {
           for (const slip of slips) {
             if (!printLocalOrders && slip.order.isLocal) continue;
             wedEligible.set(slip.order.id, isWednesdayEligible(slip));
-            const isDanger = !slip.order.isAccessPoint && slip.alert?.level === "danger";
+            const isDanger = !slip.order.isAccessPoint && !slip.order.isReship && slip.alert?.level === "danger";
             const isWeekend = slip.weather?.crossesWeekend === true;
             const outOfRange = slip.weather?.forecastOutOfRange === true;
             if (!isDanger && !isWeekend && !(requireInRange && outOfRange)) {

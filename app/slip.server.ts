@@ -88,8 +88,8 @@ async function buildSlipFromOrder(
   );
   if (taggedAsAP) console.log(`[AP check] order ${o.name} tagged as access point`);
 
-  // Access points are climate-controlled UPS locations — weather holds don't apply
-  const alert = (isLocal || isAccessPoint) ? null : getAlert(maxTempF, minTempF, settings.dontShipAbove, settings.icePackAbove, settings.dontShipBelow, settings.cautionBelow);
+  // Calculate alert for all orders, but access points/reships ignore danger level
+  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.dontShipAbove, settings.icePackAbove, settings.dontShipBelow, settings.cautionBelow);
 
   return {
     order: {
