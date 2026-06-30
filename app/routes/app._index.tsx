@@ -115,7 +115,7 @@ export default function Index() {
   const [packableFilter, setPackableFilter] = useState(false);
   const [packableIds, setPackableIds] = useState<Set<string> | null>(null);
   const [fetchingPackable, setFetchingPackable] = useState(false);
-  const [blockedOrders, setBlockedOrders] = useState<Array<{ id: string; name: string; customerName: string; city: string; province: string; zip: string; createdAt: string; reason: string }>>([]);
+  const [blockedOrders, setBlockedOrders] = useState<Array<{ id: string; name: string; customerName: string; city: string; province: string; zip: string; createdAt: string; reason: string; transitDays?: number }>>([]);
 
   // Ship-date modal
   const [showPackableModal, setShowPackableModal] = useState(false);
@@ -166,6 +166,7 @@ export default function Index() {
     async function checkAgainst(ids: string[], date: string, requireInRange = false) {
       const passed = new Set<string>();
       const failedReason = new Map<string, string>();
+      const transitDays = new Map<string, number>();
       const missing = new Set<string>();
       const wedEligible = new Map<string, boolean>();
       for (let i = 0; i < ids.length; i += BATCH) {
@@ -178,6 +179,9 @@ export default function Index() {
           for (const slip of slips) {
             if (!printLocalOrders && slip.order.isLocal) continue;
             wedEligible.set(slip.order.id, isWednesdayEligible(slip));
+            if (slip.weather?.transitDays) {
+              transitDays.set(slip.order.id, slip.weather.transitDays);
+            }
             const isDanger = !slip.order.isAccessPoint && !slip.order.isReship && slip.alert?.level === "danger";
             const isWeekend = slip.weather?.crossesWeekend === true;
             const outOfRange = slip.weather?.forecastOutOfRange === true;
@@ -200,16 +204,18 @@ export default function Index() {
           }
         } catch {}
       }
-      return { passed, failedReason, missing, wedEligible };
+      return { passed, failedReason, transitDays, missing, wedEligible };
     }
 
     const allIds = eligibleOrders.map((o) => o.id);
     const shipDates: Record<string, string> = {};
+    const allTransitDays = new Map<string, number>();
     const wedEligible = new Map<string, boolean>();
 
     // Pass 1: the chosen ship date.
     const p1 = await checkAgainst(allIds, shipDate);
     for (const [id, v] of p1.wedEligible) wedEligible.set(id, v);
+    for (const [id, days] of p1.transitDays) allTransitDays.set(id, days);
     const safeIds = new Set<string>(p1.passed);
     for (const id of p1.passed) shipDates[id] = shipDate;
 
@@ -236,6 +242,7 @@ export default function Index() {
       if (candidates.length === 0) continue;
       const pass = await checkAgainst(candidates, date, true);
       for (const [id, v] of pass.wedEligible) wedEligible.set(id, v);
+      for (const [id, days] of pass.transitDays) allTransitDays.set(id, days);
       for (const id of pass.passed) {
         safeIds.add(id);
         shipDates[id] = date;
@@ -255,6 +262,7 @@ export default function Index() {
         zip: orderInfo?.zip ?? "",
         createdAt: orderInfo?.createdAt ?? "",
         reason,
+        transitDays: allTransitDays.get(id),
       };
     });
 
@@ -272,11 +280,13 @@ export default function Index() {
     const rows = blockedOrders
       .map((o) => {
         const checkmark = emailedSet.has(o.id) ? '<span style="color:#2d9900;font-weight:bold;margin-right:8px;">✓</span>' : '';
+        const transitDaysStr = o.transitDays ? `${o.transitDays} day${o.transitDays !== 1 ? 's' : ''}` : '—';
         return `<tr>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;font-weight:600;">${checkmark}${shopDomain ? `<a href="https://${shopDomain}/admin/orders/${o.id}" target="_blank" rel="noopener noreferrer" style="color:#005bd3;text-decoration:none;">${o.name}</a>` : o.name}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;">${o.customerName}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#6d7175;">${[o.city, o.province, o.zip].filter(Boolean).join(", ")}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#6d7175;white-space:nowrap;">${o.createdAt}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#6d7175;font-weight:600;">${transitDaysStr}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e0e0e0;color:#c00;font-weight:600;">${o.reason}</td>
         </tr>`;
       })
@@ -301,7 +311,7 @@ export default function Index() {
   <h1>Orders on Hold</h1>
   <div class="subtitle">Generated ${date} &mdash; ${blockedOrders.length} order${blockedOrders.length !== 1 ? "s" : ""} cannot ship today</div>
   <table>
-    <thead><tr><th>Order</th><th>Customer</th><th>Ship to</th><th>Order date</th><th>Reason</th></tr></thead>
+    <thead><tr><th>Order</th><th>Customer</th><th>Ship to</th><th>Order date</th><th>Shipping speed</th><th>Reason</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
 </body>
