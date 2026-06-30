@@ -250,6 +250,11 @@ function SlipView({ slip, shopLogoUrl, shopName, rolled }: { slip: any; shopLogo
                 : <span style={{ color: "#444" }}>{order.shippingMethod || "—"}</span>
               }
             </div>
+            {!order.isLocal && weather && (
+              <div style={{ fontSize: "12px", color: "#6d7175", marginBottom: "12px" }}>
+                <strong>{weather.transitDays}</strong> day{weather.transitDays !== 1 ? "s" : ""} in transit
+              </div>
+            )}
             {order.customerEmail && (
               <div>
                 <div style={{ fontSize: "11px", fontWeight: 700, color: "#6d7175", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "4px" }}>Email</div>
