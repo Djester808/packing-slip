@@ -39,7 +39,7 @@ function lineItemCollections(node: any): Array<{ handle?: string | null; title?:
 
 async function buildSlipFromOrder(
   o: any,
-  settings: { dontShipAbove: number; icePackAbove: number; dontShipBelow: number; cautionBelow: number },
+  settings: { dontShipAbove: number; heatHoldAbove: number; icePackAbove: number; dontShipBelow: number; cautionBelow: number },
   shipDate: Date,
 ) {
   const orderId = o.id.split("/").pop();
@@ -89,7 +89,7 @@ async function buildSlipFromOrder(
   if (taggedAsAP) console.log(`[AP check] order ${o.name} tagged as access point`);
 
   // Calculate alert for all orders, but access points/reships ignore danger level
-  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.dontShipAbove, settings.icePackAbove, settings.dontShipBelow, settings.cautionBelow);
+  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.dontShipAbove, settings.icePackAbove, settings.dontShipBelow, settings.cautionBelow, settings.heatHoldAbove);
 
   return {
     order: {
@@ -145,7 +145,7 @@ async function buildSlipFromOrder(
   };
 }
 
-export async function fetchSlip(orderId: string, settings: { dontShipAbove: number; icePackAbove: number; dontShipBelow: number; cautionBelow: number }) {
+export async function fetchSlip(orderId: string, settings: { dontShipAbove: number; heatHoldAbove: number; icePackAbove: number; dontShipBelow: number; cautionBelow: number }) {
   const gid = `gid://shopify/Order/${orderId}`;
   const data = await shopifyGraphQL(
     `query getOrder($id: ID!) { order(id: $id) { ${SLIP_ORDER_FIELDS} } }`,
@@ -158,7 +158,7 @@ export async function fetchSlip(orderId: string, settings: { dontShipAbove: numb
 
 export async function fetchSlipBatch(
   orderIds: string[],
-  settings: { dontShipAbove: number; icePackAbove: number; dontShipBelow: number; cautionBelow: number },
+  settings: { dontShipAbove: number; heatHoldAbove: number; icePackAbove: number; dontShipBelow: number; cautionBelow: number },
   overrideShipDate?: Date,
 ): Promise<any[]> {
   if (orderIds.length === 0) return [];

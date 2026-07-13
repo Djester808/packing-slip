@@ -27,6 +27,21 @@ export function isLiveAnimal(title: string, isLivestock = false): boolean {
   return LIVE_ANIMAL_RE.test(title) && !NON_ANIMAL_RE.test(title);
 }
 
+// Wednesday ships only 2-day/overnight service or dry goods. An order is eligible
+// for the restricted Wednesday slot if its method is fast service, or it contains
+// no live animals (fish included, via the isFish/collection flag).
+const FAST_METHOD_RE = /overnight|next.?day|2.?day|2nd day|two.?day|express/i;
+export function isFastMethod(method: string): boolean {
+  return FAST_METHOD_RE.test(method);
+}
+export function isWednesdayEligible(
+  shippingMethod: string,
+  items: Array<{ title?: string | null; isFish?: boolean }>,
+): boolean {
+  if (isFastMethod(shippingMethod)) return true;
+  return !items.some((li) => isLiveAnimal(li.title ?? "", li.isFish ?? false));
+}
+
 export function getPackBadgeTotal(
   variant: string | null,
   quantity: number,

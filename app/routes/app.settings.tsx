@@ -21,12 +21,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "save-thresholds") {
     const dontShipAbove = parseInt(form.get("dontShipAbove") as string);
+    const heatHoldAbove = parseInt(form.get("heatHoldAbove") as string);
     const icePackAbove  = parseInt(form.get("icePackAbove")  as string);
     const dontShipBelow = parseInt(form.get("dontShipBelow") as string);
     const cautionBelow  = parseInt(form.get("cautionBelow")  as string);
-    console.log("[save-thresholds] received:", { dontShipAbove, icePackAbove, dontShipBelow, cautionBelow });
     const data = {
       ...(isFinite(dontShipAbove) && { dontShipAbove }),
+      ...(isFinite(heatHoldAbove) && { heatHoldAbove }),
       ...(isFinite(icePackAbove)  && { icePackAbove }),
       ...(isFinite(dontShipBelow) && { dontShipBelow }),
       ...(isFinite(cautionBelow)  && { cautionBelow }),
@@ -95,6 +96,7 @@ export default function Settings() {
   const saved = fetcher.state === "idle" && (fetcher.data as any)?.ok;
 
   const [dontShipAbove, setDontShipAbove] = useState(String(settings.dontShipAbove));
+  const [heatHoldAbove, setHeatHoldAbove] = useState(String(settings.heatHoldAbove));
   const [icePackAbove, setIcePackAbove] = useState(String(settings.icePackAbove));
   const [dontShipBelow, setDontShipBelow] = useState(String(settings.dontShipBelow));
   const [cautionBelow, setCautionBelow] = useState(String(settings.cautionBelow));
@@ -156,12 +158,21 @@ export default function Settings() {
             </Text>
             <BlockStack gap="300">
               <TextField
-                label="Do not ship above (°F)"
+                label="Insulated box above (°F)"
                 name="dontShipAbove"
                 type="number"
                 value={dontShipAbove}
                 onChange={setDontShipAbove}
-                helpText="Red alert — hold the shipment"
+                helpText="Orange alert — ship in an insulated oversized box (still ships)"
+                autoComplete="off"
+              />
+              <TextField
+                label="Do not ship above (°F)"
+                name="heatHoldAbove"
+                type="number"
+                value={heatHoldAbove}
+                onChange={setHeatHoldAbove}
+                helpText="Red alert — too hot, hold the shipment and email the customer"
                 autoComplete="off"
               />
               <TextField
@@ -196,7 +207,7 @@ export default function Settings() {
                   loading={isSaving}
                   variant="primary"
                   onClick={() => fetcher.submit(
-                    { intent: "save-thresholds", dontShipAbove, icePackAbove, dontShipBelow, cautionBelow },
+                    { intent: "save-thresholds", dontShipAbove, heatHoldAbove, icePackAbove, dontShipBelow, cautionBelow },
                     { method: "post" },
                   )}
                 >

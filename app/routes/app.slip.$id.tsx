@@ -113,7 +113,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     }
   }
 
-  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.dontShipAbove, settings.icePackAbove, settings.dontShipBelow, settings.cautionBelow);
+  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.dontShipAbove, settings.icePackAbove, settings.dontShipBelow, settings.cautionBelow, settings.heatHoldAbove);
 
   const lineItems = (o.lineItems?.edges ?? [])
     .filter((e: any) => !/^tip$/i.test(e.node.title?.trim()))
@@ -196,7 +196,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 };
 
 const ALERT_ICON: Record<string, string> = {
-  danger: "⛔", caution: "⚠️", safe: "✅", unknown: "❓",
+  danger: "⛔", caution: "⚠️", insulated: "📦", safe: "✅", unknown: "❓",
 };
 
 export default function PackingSlip() {
@@ -297,7 +297,8 @@ export default function PackingSlip() {
           </div>
         )}
 
-        {!doNotShip && otherOrders.length > 0 && (
+        {/* Always shown (even on do-not-ship/rolled orders) — combining matters most when holding */}
+        {otherOrders.length > 0 && (
           <div className="slip-banner" style={{ background: "#fff0f0", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>
               ⚠️ {otherOrders.length} other unfulfilled order{otherOrders.length !== 1 ? "s" : ""} from this customer

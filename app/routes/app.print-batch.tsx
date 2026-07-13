@@ -41,7 +41,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 const ALERT_ICON: Record<string, string> = {
-  danger: "⛔", caution: "⚠️", safe: "✅", unknown: "❓",
+  danger: "⛔", caution: "⚠️", insulated: "📦", safe: "✅", unknown: "❓",
 };
 
 // Pack-badge math lives in ../pack-badge (single source of truth, unit-tested) so

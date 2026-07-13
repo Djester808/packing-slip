@@ -7,7 +7,7 @@ import { Page, Card, Text, BlockStack, Box, Badge, InlineStack } from "@shopify/
 import { shopifyGraphQL } from "../admin-api.server";
 import { seedDefaultRulesIfEmpty } from "../transit.server";
 import { nextShipDate } from "../weather.server";
-import { isLiveAnimal } from "../pack-badge";
+import { isWednesdayEligible } from "../pack-badge";
 import prisma from "../db.server";
 
 const PAGE_SIZE = 25;
@@ -24,14 +24,9 @@ function isLocalShipping(method: string) {
   return /local|pickup|pick.?up/i.test(method);
 }
 
-// Wednesday ships only 2-day/overnight service or dry goods. An order may roll
-// forward onto the restricted Wednesday slot only if its method is fast service
-// or it contains no live animals (isLiveAnimal shared with pack-badge).
-const FAST_METHOD_RE = /overnight|next.?day|2.?day|2nd day|two.?day|express/i;
-function isWednesdayEligible(slip: any): boolean {
-  if (FAST_METHOD_RE.test(slip.order?.shippingMethod ?? "")) return true;
-  const items: any[] = slip.order?.lineItems ?? [];
-  return !items.some((li) => isLiveAnimal(li.title ?? "", li.isFish));
+// Wednesday-eligibility (fast service or no live animals) lives in ../pack-badge.
+function slipWednesdayEligible(slip: any): boolean {
+  return isWednesdayEligible(slip.order?.shippingMethod ?? "", slip.order?.lineItems ?? []);
 }
 
 export const loader = async (_: LoaderFunctionArgs) => {
@@ -178,7 +173,7 @@ export default function Index() {
           const returnedIds = new Set(slips.map((s: any) => s.order.id));
           for (const slip of slips) {
             if (!printLocalOrders && slip.order.isLocal) continue;
-            wedEligible.set(slip.order.id, isWednesdayEligible(slip));
+            wedEligible.set(slip.order.id, slipWednesdayEligible(slip));
             if (slip.weather?.transitDays) {
               transitDays.set(slip.order.id, slip.weather.transitDays);
             }

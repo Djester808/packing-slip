@@ -85,7 +85,6 @@ export const loader = async (_: LoaderFunctionArgs) => {
         promisedDelivery.setDate(promisedDelivery.getDate() + transitDays);
 
         // Calculate days late using only date portions (ignore time of day)
-        const pickedUpDate = new Date(pickedUpAt.getFullYear(), pickedUpAt.getMonth(), pickedUpAt.getDate());
         const deliveredDate = new Date(deliveredAt.getFullYear(), deliveredAt.getMonth(), deliveredAt.getDate());
         const promisedDate = new Date(promisedDelivery.getFullYear(), promisedDelivery.getMonth(), promisedDelivery.getDate());
 

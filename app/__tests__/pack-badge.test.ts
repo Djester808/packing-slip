@@ -1,4 +1,4 @@
-import { getPackBadge, isLivestockCollection } from '../pack-badge';
+import { getPackBadge, isLivestockCollection, isWednesdayEligible } from '../pack-badge';
 
 describe('getPackBadge', () => {
   describe('Breeder Pack', () => {
@@ -200,6 +200,32 @@ describe('getPackBadge', () => {
 
     it('without the livestock flag a species-named fish gets no badge', () => {
       expect(getPackBadge(null, 10, 'Endler', false)).toBeNull();
+    });
+  });
+
+  describe('isWednesdayEligible (Wednesday = fast service or dry goods only)', () => {
+    it('fast-service methods are eligible even with live animals', () => {
+      expect(isWednesdayEligible('UPS 2nd Day Air', [{ title: 'Cherry Shrimp' }])).toBe(true);
+      expect(isWednesdayEligible('Overnight', [{ title: 'Nerite Snail' }])).toBe(true);
+      expect(isWednesdayEligible('Priority Overnight', [{ title: 'Betta', isFish: true }])).toBe(true);
+    });
+
+    it('ground order with only dry goods is eligible', () => {
+      expect(isWednesdayEligible('UPS Ground', [{ title: 'Catappa Leaves' }, { title: 'Mineral Rocks' }])).toBe(true);
+    });
+
+    it('ground order with live animals is NOT eligible', () => {
+      expect(isWednesdayEligible('UPS Ground', [{ title: 'Cherry Shrimp' }])).toBe(false);
+      expect(isWednesdayEligible('Free 2-Day', [])).toBe(true); // fast method, empty cart
+    });
+
+    it('ground order with a fish (by collection flag) is NOT eligible', () => {
+      // Species name has no animal keyword — relies on the isFish flag
+      expect(isWednesdayEligible('UPS Ground', [{ title: 'Galaxy Rasbora', isFish: true }])).toBe(false);
+    });
+
+    it('mixed cart with any live animal is NOT eligible on ground', () => {
+      expect(isWednesdayEligible('UPS Ground', [{ title: 'Catappa Leaves' }, { title: 'Vampire Crab' }])).toBe(false);
     });
   });
 

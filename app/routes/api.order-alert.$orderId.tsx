@@ -16,6 +16,7 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
 
     const slip = await fetchSlip(orderId, {
       dontShipAbove: settings.dontShipAbove,
+      heatHoldAbove: settings.heatHoldAbove,
       icePackAbove: settings.icePackAbove,
       dontShipBelow: settings.dontShipBelow,
       cautionBelow: settings.cautionBelow,

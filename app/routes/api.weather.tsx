@@ -90,6 +90,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const settings = await prisma.appSettings.findUnique({ where: { id: "singleton" } });
   const dontShipAbove = settings?.dontShipAbove ?? 90;
+  const heatHoldAbove = settings?.heatHoldAbove ?? 100;
   const icePackAbove  = settings?.icePackAbove  ?? 80;
   const dontShipBelow = settings?.dontShipBelow ?? 35;
   const cautionBelow  = settings?.cautionBelow  ?? 45;
@@ -121,8 +122,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const isShipDay = date === shipDateStr;
     const isDeliveryDay = transitWindowDates.slice(1).includes(date);
     let classification: "safe" | "caution" | "risk" = "safe";
-    if (high >= dontShipAbove || low <= dontShipBelow) classification = "risk";
-    else if (high >= icePackAbove || low <= cautionBelow) classification = "caution";
+    if (high >= heatHoldAbove || low <= dontShipBelow) classification = "risk";
+    else if (high >= dontShipAbove || high >= icePackAbove || low <= cautionBelow) classification = "caution";
 
     return {
       date, high, low, isShipDay, isDeliveryDay, classification,
@@ -167,7 +168,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shipNote,
       shipRestriction,
       holidayTuesdays,
-      thresholds: { dontShipAbove, icePackAbove, dontShipBelow, cautionBelow, heatPackBelow },
+      thresholds: { dontShipAbove, heatHoldAbove, icePackAbove, dontShipBelow, cautionBelow, heatPackBelow },
       sources: nwsAvailable ? ["Open-Meteo", "NWS"] : ["Open-Meteo"],
       forecast,
       transitWindow,

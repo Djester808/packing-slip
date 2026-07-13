@@ -1,4 +1,4 @@
-export type AlertLevel = "safe" | "caution" | "danger" | "unknown";
+export type AlertLevel = "safe" | "caution" | "insulated" | "danger" | "unknown";
 
 export interface ShipAlert {
   level: AlertLevel;
@@ -15,6 +15,7 @@ export function getAlert(
   icePackAbove: number,
   dontShipBelow: number,
   cautionBelow: number,
+  heatHoldAbove: number,
 ): ShipAlert {
   if (maxTempF === null) {
     return {
@@ -29,7 +30,8 @@ export function getAlert(
   const high = Math.round(maxTempF);
   const low  = minTempF !== null ? Math.round(minTempF) : null;
 
-  if (high >= dontShipAbove) {
+  // Extreme heat → hard hold (and notify the customer).
+  if (high >= heatHoldAbove) {
     return {
       level: "danger",
       headline: `Do not ship — ${high}°F high expected`,
@@ -46,6 +48,17 @@ export function getAlert(
       body: `A low of ${low}°F is forecast for the estimated delivery day. Temperatures are too cold for safe transit. Hold the shipment or contact the customer to arrange a safer ship date.`,
       color: "#1e6fbf",
       bg: "#f0f5ff",
+    };
+  }
+
+  // High heat but below the hard-hold cutoff → ship, but in an insulated oversized box.
+  if (high >= dontShipAbove) {
+    return {
+      level: "insulated",
+      headline: `Use insulated oversized box — ${high}°F high expected`,
+      body: `A high of ${high}°F is forecast for the estimated delivery day. Pack in an insulated oversized box with an ice pack to protect against heat in transit.`,
+      color: "#c2410c",
+      bg: "#fff7ed",
     };
   }
 
