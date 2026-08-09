@@ -169,30 +169,6 @@ export function nextShipDate(now: Date = new Date()): { date: Date; isWednesdayO
   return nextWeek();
 }
 
-// The remaining ship days in the SAME week, strictly after `after`, in order.
-// Tuesday is unrestricted; Wednesday is restricted (2-day/overnight/dry goods).
-// Holidays are skipped. Roll-forward stays within the current shipping week — an
-// order that can't arrive this week without sitting over the weekend is held, not
-// pushed into next week.
-//   Monday    → [Tuesday, Wednesday]
-//   Tuesday   → [Wednesday]
-//   Wednesday → []
-export function remainingShipDaysThisWeek(after: Date): Array<{ date: Date; restricted: boolean }> {
-  const base = new Date(Date.UTC(after.getUTCFullYear(), after.getUTCMonth(), after.getUTCDate()));
-  const dow = base.getUTCDay();
-  function addDays(d: Date, n: number): Date {
-    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n));
-  }
-  const out: Array<{ date: Date; restricted: boolean }> = [];
-  for (const target of [2, 3] as const) { // Tuesday, then Wednesday
-    if (dow >= 1 && dow < target) {
-      const d = addDays(base, target - dow);
-      if (!isHoliday(d)) out.push({ date: d, restricted: target === 3 });
-    }
-  }
-  return out;
-}
-
 export function addBusinessDays(from: Date, days: number): Date {
   const result = new Date(from);
   let added = 0;

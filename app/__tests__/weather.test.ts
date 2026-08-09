@@ -1,4 +1,4 @@
-import { nextShipDate, remainingShipDaysThisWeek, HOLIDAY_DATES } from '../weather.server';
+import { nextShipDate, HOLIDAY_DATES } from '../weather.server';
 
 // June 2026 is CDT (UTC-5). To represent a Central time, add 5h to get UTC.
 // e.g. Tue Jun 2 9:00 AM CDT  = new Date("2026-06-02T14:00:00Z")
@@ -135,29 +135,5 @@ describe('nextShipDate', () => {
         new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).getTime()
       );
     });
-  });
-});
-
-describe('remainingShipDaysThisWeek (in-week roll-forward, never next week)', () => {
-  // June 2026: 8 Mon, 9 Tue, 10 Wed, 15 Mon (Wed marked with *)
-  const days = (d: string) =>
-    remainingShipDaysThisWeek(new Date(d)).map((x) => `${x.date.toISOString().slice(0, 10)}${x.restricted ? '*' : ''}`);
-
-  it('Monday → Tuesday then restricted Wednesday (same week only)', () => {
-    expect(days('2026-06-08')).toEqual(['2026-06-09', '2026-06-10*']);
-  });
-
-  it('Tuesday → restricted Wednesday only (never jumps to next Monday)', () => {
-    // The repeated "SHIPS MON, JUN 22" bug was this returning a next-week date.
-    expect(days('2026-06-09')).toEqual(['2026-06-10*']);
-  });
-
-  it('Wednesday → nothing (last ship day of the week)', () => {
-    expect(days('2026-06-10')).toEqual([]);
-  });
-
-  it('skips a holiday Tuesday but keeps the eligible Wednesday', () => {
-    // From Mon 2028-07-03: Tuesday Jul 4 is a holiday → skipped; Wednesday Jul 5* kept
-    expect(days('2028-07-03')).toEqual(['2028-07-05*']);
   });
 });

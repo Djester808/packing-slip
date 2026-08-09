@@ -20,19 +20,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = form.get("intent") as string;
 
   if (intent === "save-thresholds") {
-    const dontShipAbove = parseInt(form.get("dontShipAbove") as string);
-    const heatHoldAbove = parseInt(form.get("heatHoldAbove") as string);
-    const icePackAbove  = parseInt(form.get("icePackAbove")  as string);
+    // Heat bands (85 / 86–100 / 100+) are fixed in code; only cold thresholds are configurable.
     const dontShipBelow = parseInt(form.get("dontShipBelow") as string);
     const cautionBelow  = parseInt(form.get("cautionBelow")  as string);
     const data = {
-      ...(isFinite(dontShipAbove) && { dontShipAbove }),
-      ...(isFinite(heatHoldAbove) && { heatHoldAbove }),
-      ...(isFinite(icePackAbove)  && { icePackAbove }),
       ...(isFinite(dontShipBelow) && { dontShipBelow }),
       ...(isFinite(cautionBelow)  && { cautionBelow }),
     };
-    console.log("[save-thresholds] saving:", data);
     await prisma.appSettings.upsert({
       where: { id: "singleton" },
       update: data,
@@ -45,15 +39,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     await prisma.appSettings.upsert({
       where: { id: "singleton" },
       update: { printLocalOrders: form.get("printLocalOrders") === "true" },
-      create: { id: "singleton" },
-    });
-    return json({ ok: true, intent });
-  }
-
-  if (intent === "save-rollover-settings") {
-    await prisma.appSettings.upsert({
-      where: { id: "singleton" },
-      update: { rolloverEnabled: form.get("rolloverEnabled") === "true" },
       create: { id: "singleton" },
     });
     return json({ ok: true, intent });
@@ -95,13 +80,9 @@ export default function Settings() {
   const isSaving = fetcher.state !== "idle";
   const saved = fetcher.state === "idle" && (fetcher.data as any)?.ok;
 
-  const [dontShipAbove, setDontShipAbove] = useState(String(settings.dontShipAbove));
-  const [heatHoldAbove, setHeatHoldAbove] = useState(String(settings.heatHoldAbove));
-  const [icePackAbove, setIcePackAbove] = useState(String(settings.icePackAbove));
   const [dontShipBelow, setDontShipBelow] = useState(String(settings.dontShipBelow));
   const [cautionBelow, setCautionBelow] = useState(String(settings.cautionBelow));
   const [printLocalOrders, setPrintLocalOrders] = useState(settings.printLocalOrders);
-  const [rolloverEnabled, setRolloverEnabled] = useState(settings.rolloverEnabled);
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || "");
 
   return (
@@ -154,36 +135,11 @@ export default function Settings() {
           <BlockStack gap="400">
             <Text as="h2" variant="headingMd">Temperature thresholds</Text>
             <Text as="p" variant="bodySm" tone="subdued">
-              Based on the forecast high on the estimated delivery day.
+              Based on the forecast high/low on the estimated delivery day. Heat bands are fixed:
+              85°F or below ships normally, 86–100°F ships in an insulated oversized box, and above
+              100°F is held with a customer email. Cold thresholds are configurable below.
             </Text>
             <BlockStack gap="300">
-              <TextField
-                label="Insulated box above (°F)"
-                name="dontShipAbove"
-                type="number"
-                value={dontShipAbove}
-                onChange={setDontShipAbove}
-                helpText="Orange alert — ship in an insulated oversized box (still ships)"
-                autoComplete="off"
-              />
-              <TextField
-                label="Do not ship above (°F)"
-                name="heatHoldAbove"
-                type="number"
-                value={heatHoldAbove}
-                onChange={setHeatHoldAbove}
-                helpText="Red alert — too hot, hold the shipment and email the customer"
-                autoComplete="off"
-              />
-              <TextField
-                label="Ice pack required above (°F)"
-                name="icePackAbove"
-                type="number"
-                value={icePackAbove}
-                onChange={setIcePackAbove}
-                helpText="Orange alert — include ice pack and consider faster shipping"
-                autoComplete="off"
-              />
               <TextField
                 label="Do not ship below (°F)"
                 name="dontShipBelow"
@@ -207,7 +163,7 @@ export default function Settings() {
                   loading={isSaving}
                   variant="primary"
                   onClick={() => fetcher.submit(
-                    { intent: "save-thresholds", dontShipAbove, heatHoldAbove, icePackAbove, dontShipBelow, cautionBelow },
+                    { intent: "save-thresholds", dontShipBelow, cautionBelow },
                     { method: "post" },
                   )}
                 >
@@ -244,36 +200,6 @@ export default function Settings() {
                   Save
                 </Button>
                 {saved && (fetcher.data as any)?.intent === "save-print-settings" && (
-                  <Text as="span" variant="bodySm" tone="success">Saved</Text>
-                )}
-              </InlineStack>
-            </BlockStack>
-          </BlockStack>
-        </Card>
-
-        {/* Shippable order calculation */}
-        <Card>
-          <BlockStack gap="400">
-            <Text as="h2" variant="headingMd">Shippable order calculation</Text>
-            <BlockStack gap="300">
-              <Checkbox
-                label="Roll orders forward to a later ship day"
-                helpText="When on, an order that can't ship on the selected day but clears a later ship day (Monday → Tuesday, plus Wednesday for 2-day/overnight/dry-goods orders) is added to the shippable list, tagged with that later date. When off, those orders stay on the hold list."
-                checked={rolloverEnabled}
-                onChange={setRolloverEnabled}
-              />
-              <InlineStack gap="300" blockAlign="center">
-                <Button
-                  loading={isSaving}
-                  variant="primary"
-                  onClick={() => fetcher.submit(
-                    { intent: "save-rollover-settings", rolloverEnabled: String(rolloverEnabled) },
-                    { method: "post" },
-                  )}
-                >
-                  Save
-                </Button>
-                {saved && (fetcher.data as any)?.intent === "save-rollover-settings" && (
                   <Text as="span" variant="bodySm" tone="success">Saved</Text>
                 )}
               </InlineStack>

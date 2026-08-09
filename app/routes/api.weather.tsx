@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { geocodeZip, nextShipDate, toDateString, HOLIDAY_DATES } from "../weather.server";
+import { SAFE_MAX_F, INSULATED_MAX_F } from "../alert";
 import prisma from "../db.server";
 
 const CORS = {
@@ -89,9 +90,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const nwsAvailable = nws.size > 0;
 
   const settings = await prisma.appSettings.findUnique({ where: { id: "singleton" } });
-  const dontShipAbove = settings?.dontShipAbove ?? 90;
-  const heatHoldAbove = settings?.heatHoldAbove ?? 100;
-  const icePackAbove  = settings?.icePackAbove  ?? 80;
   const dontShipBelow = settings?.dontShipBelow ?? 35;
   const cautionBelow  = settings?.cautionBelow  ?? 45;
   const heatPackBelow = 32;
@@ -122,8 +120,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const isShipDay = date === shipDateStr;
     const isDeliveryDay = transitWindowDates.slice(1).includes(date);
     let classification: "safe" | "caution" | "risk" = "safe";
-    if (high >= heatHoldAbove || low <= dontShipBelow) classification = "risk";
-    else if (high >= dontShipAbove || high >= icePackAbove || low <= cautionBelow) classification = "caution";
+    if (high > INSULATED_MAX_F || low <= dontShipBelow) classification = "risk";
+    else if (high > SAFE_MAX_F || low <= cautionBelow) classification = "caution";
 
     return {
       date, high, low, isShipDay, isDeliveryDay, classification,
@@ -168,13 +166,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shipNote,
       shipRestriction,
       holidayTuesdays,
-      thresholds: { dontShipAbove, heatHoldAbove, icePackAbove, dontShipBelow, cautionBelow, heatPackBelow },
+      // dontShipAbove/icePackAbove kept for the storefront widget's hot-vs-cold split,
+      // mapped to the fixed heat bands (hot risk > 100, hot caution > 85).
+      thresholds: { dontShipAbove: INSULATED_MAX_F, icePackAbove: SAFE_MAX_F + 1, dontShipBelow, cautionBelow, heatPackBelow },
       sources: nwsAvailable ? ["Open-Meteo", "NWS"] : ["Open-Meteo"],
       forecast,
       transitWindow,
       recommendation: {
         heatPack: avgLow <= heatPackBelow,
-        icePack: avgHigh > icePackAbove,
+        icePack: avgHigh > SAFE_MAX_F,
         dontShip: recDays.some((d) => d.classification === "risk"),
       },
     },

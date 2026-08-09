@@ -46,13 +46,9 @@ model WeatherCache {
 
 model AppSettings {
   id                String  @id @default("singleton")
-  dontShipAbove     Int     @default(90)   // heat: at/above this → insulated oversized box (not held)
-  heatHoldAbove     Int     @default(100)  // heat: at/above this → hard hold + email
-  icePackAbove      Int     @default(80)
-  dontShipBelow     Int     @default(35)
-  cautionBelow      Int     @default(45)
+  dontShipBelow     Int     @default(35)   // cold: at/below this → hard hold
+  cautionBelow      Int     @default(45)   // cold: at/below this → heat-pack caution
   printLocalOrders  Boolean @default(false)
-  rolloverEnabled   Boolean @default(true)
   delayEmailTemplate String @default("")
   logoUrl           String?
 }

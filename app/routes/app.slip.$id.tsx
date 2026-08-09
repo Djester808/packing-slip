@@ -60,8 +60,6 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const isLocal = isLocalShipping(shippingMethod);
   const shipDateParam = url.searchParams.get("shipDate");
   const shipDate = shipDateParam ? new Date(shipDateParam) : nextShipDate().date;
-  // Set when the order was rolled forward to a later ship day than the one chosen.
-  const rolled = url.searchParams.get("rolled") === "1";
 
   // Wave 2: transit days, app settings, and other-orders lookup all in parallel
   const [transitDays, settings, otherOrdersRaw] = await Promise.all([
@@ -113,7 +111,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     }
   }
 
-  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.dontShipAbove, settings.icePackAbove, settings.dontShipBelow, settings.cautionBelow, settings.heatHoldAbove);
+  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.dontShipBelow, settings.cautionBelow);
 
   const lineItems = (o.lineItems?.edges ?? [])
     .filter((e: any) => !/^tip$/i.test(e.node.title?.trim()))
@@ -190,7 +188,6 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
       })(),
     },
     alert,
-    rolled,
     shopDomain,
   });
 };
@@ -200,12 +197,12 @@ const ALERT_ICON: Record<string, string> = {
 };
 
 export default function PackingSlip() {
-  const { order, weather, alert, shopLogoUrl, shopName, nav, otherOrders, shipDate, rolled, shopDomain } = useLoaderData<typeof loader>();
+  const { order, weather, alert, shopLogoUrl, shopName, nav, otherOrders, shipDate, shopDomain } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading" && navigation.location?.pathname.startsWith("/app/slip");
-  // A rolled-over or "do not ship" order shows ONLY that banner — suppress the rest.
-  const doNotShip = rolled || weather?.crossesWeekend === true;
+  // A "do not ship" (weekend/too-long transit) order shows ONLY that banner — suppress the rest.
+  const doNotShip = weather?.crossesWeekend === true;
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const toggleCheck = (i: number) => setChecked((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
 
@@ -273,22 +270,13 @@ export default function PackingSlip() {
 
       <div className="slip" style={{ maxWidth: "760px", margin: "32px auto", background: "#fff", borderRadius: "8px", boxShadow: "0 1px 4px rgba(0,0,0,0.1)", padding: "40px" }}>
 
-        {rolled && (
-          <div className="slip-banner slip-banner--strong" style={{ background: "#ffd7d5", border: "2px solid #d72c0d", borderRadius: "6px", padding: "12px 14px", marginBottom: "14px" }}>
-            <div style={{ fontSize: "15px", fontWeight: 800, color: "#d72c0d", letterSpacing: "0.02em" }}>🚫 DO NOT SHIP UNTIL {shipDate}</div>
-            <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
-              Rolled forward from the earlier ship day — hold this order until {shipDate}.
-            </div>
-          </div>
-        )}
-
         {!doNotShip && order.isReship && (
           <div className="slip-banner" style={{ background: "#5c007a", borderRadius: "6px", padding: "8px 14px", marginBottom: "14px" }}>
             <span style={{ fontSize: "12px", fontWeight: 800, color: "#fff", letterSpacing: "0.06em" }}>🔄 RESHIP — Verify original order before packing</span>
           </div>
         )}
 
-        {!rolled && weather?.crossesWeekend && (
+        {weather?.crossesWeekend && (
           <div className="slip-banner slip-banner--strong" style={{ background: "#ffd7d5", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>🚫 DO NOT SHIP — ARRIVES NEXT WEEK</div>
             <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>

@@ -18,24 +18,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   ]);
 
   const shipDate = url.searchParams.get("shipDate") ?? null;
-  // Per-order ship-date overrides for orders rolled forward to a later ship day,
-  // encoded as "id:YYYY-MM-DD,id:YYYY-MM-DD".
-  const shipDateOverrides: Record<string, string> = {};
-  for (const pair of url.searchParams.get("shipDates")?.split(",").filter(Boolean) ?? []) {
-    const [id, date] = pair.split(":");
-    if (id && date) shipDateOverrides[id] = date;
-  }
 
   return json({
     ids,
     shipDate,
-    shipDateOverrides,
     shopName: shopNameData?.data?.shop?.name ?? null,
     shopLogoUrl: shopBrandData?.data?.shop?.brand?.logo?.image?.url
       ?? shopBrandData?.data?.shop?.brand?.squareLogo?.image?.url
       ?? null,
-    dontShipAbove: settings.dontShipAbove,
-    icePackAbove: settings.icePackAbove,
     printLocalOrders: settings.printLocalOrders,
   });
 };
@@ -124,11 +114,11 @@ function Signature({ note }: { note: string | null }) {
   );
 }
 
-function SlipView({ slip, shopLogoUrl, shopName, rolled }: { slip: any; shopLogoUrl: string | null; shopName: string | null; rolled: boolean }) {
+function SlipView({ slip, shopLogoUrl, shopName }: { slip: any; shopLogoUrl: string | null; shopName: string | null }) {
   const { order, weather, alert, shipDate } = slip;
-  // A rolled-over or "do not ship" order shows ONLY that banner — everything else
-  // (reship, access point, local, weather alert) is suppressed so it can't be missed.
-  const doNotShip = rolled || weather?.crossesWeekend === true;
+  // A "do not ship" (weekend/too-long transit) order shows ONLY that banner — everything
+  // else (reship, access point, local, weather alert) is suppressed so it can't be missed.
+  const doNotShip = weather?.crossesWeekend === true;
   const allItems: any[] = order.lineItems;
 
   const page1Items = allItems.slice(0, ITEMS_PAGE_1);
@@ -143,15 +133,6 @@ function SlipView({ slip, shopLogoUrl, shopName, rolled }: { slip: any; shopLogo
     <>
       {/* Page 1: full header + address + first batch of items */}
       <div className="slip" style={{ maxWidth: "760px", margin: "32px auto", background: "#fff", borderRadius: "8px", boxShadow: "0 1px 4px rgba(0,0,0,0.1)", padding: "40px" }}>
-
-        {rolled && (
-          <div className="slip-banner slip-banner--strong" style={{ background: "#ffd7d5", border: "2px solid #d72c0d", borderRadius: "6px", padding: "12px 14px", marginBottom: "14px" }}>
-            <div style={{ fontSize: "15px", fontWeight: 800, color: "#d72c0d", letterSpacing: "0.02em" }}>🚫 DO NOT SHIP UNTIL {shipDate}</div>
-            <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
-              Rolled forward from the earlier ship day — hold this order until {shipDate}.
-            </div>
-          </div>
-        )}
 
         {!doNotShip && order.isReship && (
           <div className="slip-banner" style={{ background: "#5c007a", borderRadius: "6px", padding: "8px 14px", marginBottom: "14px" }}>
@@ -168,7 +149,7 @@ function SlipView({ slip, shopLogoUrl, shopName, rolled }: { slip: any; shopLogo
           </div>
         )}
 
-        {!rolled && weather?.crossesWeekend && (
+        {weather?.crossesWeekend && (
           <div className="slip-banner slip-banner--strong" style={{ background: "#ffd7d5", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>🚫 DO NOT SHIP — ARRIVES NEXT WEEK</div>
             <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
@@ -303,7 +284,7 @@ function SlipView({ slip, shopLogoUrl, shopName, rolled }: { slip: any; shopLogo
 }
 
 export default function PrintBatch() {
-  const { ids, shipDate, shipDateOverrides, shopLogoUrl, shopName, printLocalOrders } = useLoaderData<typeof loader>();
+  const { ids, shipDate, shopLogoUrl, shopName, printLocalOrders } = useLoaderData<typeof loader>();
   const [slips, setSlips] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(0);
   const [loadError, setLoadError] = useState(false);
@@ -319,26 +300,15 @@ export default function PrintBatch() {
       const allSlips: any[] = [];
       await Promise.all(chunks.map(async (chunk) => {
         if (cancelled) return;
-        // Within a chunk, group orders by their effective ship date so each group
-        // is fetched with its own date and shows the right forecast.
-        const groups = new Map<string | null, string[]>();
-        for (const id of chunk) {
-          const d = shipDateOverrides[id] ?? shipDate;
-          if (!groups.has(d)) groups.set(d, []);
-          groups.get(d)!.push(id);
-        }
         try {
-          for (const [d, gids] of groups) {
-            if (cancelled) return;
-            const res = await fetch(`/api/slips?ids=${gids.join(",")}${d ? `&shipDate=${encodeURIComponent(d)}` : ""}`);
-            if (res.ok && !cancelled) {
-              const batch: any[] = await res.json();
-              if (!cancelled) {
-                batch.filter((s) => s && (printLocalOrders || !s.order.isLocal)).forEach((s) => allSlips.push(s));
-              }
-            } else if (!res.ok && !cancelled) {
-              setLoadError(true);
+          const res = await fetch(`/api/slips?ids=${chunk.join(",")}${shipDate ? `&shipDate=${encodeURIComponent(shipDate)}` : ""}`);
+          if (res.ok && !cancelled) {
+            const batch: any[] = await res.json();
+            if (!cancelled) {
+              batch.filter((s) => s && (printLocalOrders || !s.order.isLocal)).forEach((s) => allSlips.push(s));
             }
+          } else if (!res.ok && !cancelled) {
+            setLoadError(true);
           }
         } catch {
           if (!cancelled) setLoadError(true);
@@ -354,13 +324,6 @@ export default function PrintBatch() {
     load();
     return () => { cancelled = true; };
   }, []);
-
-  useEffect(() => {
-    if (done && slips.length > 0) {
-      const t = setTimeout(() => window.print(), 500);
-      return () => clearTimeout(t);
-    }
-  }, [done, slips.length]);
 
   return (
     <>
@@ -441,7 +404,7 @@ export default function PrintBatch() {
       )}
 
       {slips.map((slip) => (
-        <SlipView key={slip.order.id} slip={slip} shopLogoUrl={shopLogoUrl} shopName={shopName} rolled={!!shipDateOverrides[slip.order.id]} />
+        <SlipView key={slip.order.id} slip={slip} shopLogoUrl={shopLogoUrl} shopName={shopName} />
       ))}
     </>
   );
