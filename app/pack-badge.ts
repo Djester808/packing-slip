@@ -22,7 +22,7 @@ export function isLivestockCollection(
 // True for live animals. Every live animal gets the +1/5 extras bonus (DOA insurance)
 // — snails, crabs, crayfish, caridina and fish are all counted like neocaridina.
 // `isLivestock` (e.g. from collection membership) forces a title to count as live.
-export function isLiveAnimal(title: string, isLivestock = false): boolean {
+function isLiveAnimal(title: string, isLivestock = false): boolean {
   if (isLivestock) return true;
   return LIVE_ANIMAL_RE.test(title) && !NON_ANIMAL_RE.test(title);
 }

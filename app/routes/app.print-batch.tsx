@@ -158,6 +158,18 @@ function SlipView({ slip, shopLogoUrl, shopName }: { slip: any; shopLogoUrl: str
           </div>
         )}
 
+        {/* Always shown — combining matters most when packing */}
+        {order.otherOrders && order.otherOrders.length > 0 && (
+          <div className="slip-banner" style={{ background: "#fff0f0", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#d72c0d" }}>
+              ⚠️ {order.otherOrders.length} other unfulfilled order{order.otherOrders.length !== 1 ? "s" : ""} from this customer
+            </div>
+            <div style={{ fontSize: "12px", color: "#7a1a0a", marginTop: "2px" }}>
+              {order.otherOrders.map((o: any) => o.name).join(", ")} — consider combining
+            </div>
+          </div>
+        )}
+
         {!doNotShip && order.isLocal && (
           <div className="slip-banner" style={{ background: "#fff3cd", border: "1px solid #f0a500", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: "#7d4e00" }}>📦 LOCAL ORDER — no weather check needed</div>
@@ -301,7 +313,7 @@ export default function PrintBatch() {
       await Promise.all(chunks.map(async (chunk) => {
         if (cancelled) return;
         try {
-          const res = await fetch(`/api/slips?ids=${chunk.join(",")}${shipDate ? `&shipDate=${encodeURIComponent(shipDate)}` : ""}`);
+          const res = await fetch(`/api/slips?ids=${chunk.join(",")}${shipDate ? `&shipDate=${encodeURIComponent(shipDate)}` : ""}&withOtherOrders=1`);
           if (res.ok && !cancelled) {
             const batch: any[] = await res.json();
             if (!cancelled) {

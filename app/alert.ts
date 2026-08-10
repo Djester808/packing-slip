@@ -10,9 +10,11 @@ export interface ShipAlert {
 
 // Fixed heat bands (delivery-day high):
 //   ≤ 85°F        → safe
-//   86°F – 100°F  → ship in an insulated oversized box
+//   86°F – 90°F   → oversized box
+//   91°F – 100°F  → oversized insulated box
 //   > 100°F       → hard hold + email
 export const SAFE_MAX_F = 85;
+export const OVERSIZED_MAX_F = 90;
 export const INSULATED_MAX_F = 100;
 
 export function getAlert(
@@ -55,12 +57,23 @@ export function getAlert(
     };
   }
 
-  // 86–100°F → ship, but in an insulated oversized box with an ice pack.
+  // 91–100°F → oversized insulated box with an ice pack.
+  if (high > OVERSIZED_MAX_F) {
+    return {
+      level: "insulated",
+      headline: `Use oversized insulated box — ${high}°F high expected`,
+      body: `A high of ${high}°F is forecast for the estimated delivery day. Pack in an oversized insulated box with an ice pack to protect against heat in transit.`,
+      color: "#c2410c",
+      bg: "#fff7ed",
+    };
+  }
+
+  // 86–90°F → oversized box with an ice pack.
   if (high > SAFE_MAX_F) {
     return {
       level: "insulated",
-      headline: `Use insulated oversized box — ${high}°F high expected`,
-      body: `A high of ${high}°F is forecast for the estimated delivery day. Pack in an insulated oversized box with an ice pack to protect against heat in transit.`,
+      headline: `Use oversized box — ${high}°F high expected`,
+      body: `A high of ${high}°F is forecast for the estimated delivery day. Pack in an oversized box with an ice pack to protect against heat in transit.`,
       color: "#c2410c",
       bg: "#fff7ed",
     };

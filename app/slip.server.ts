@@ -12,7 +12,7 @@ export function isLocalShipping(method: string) {
 
 const SLIP_ORDER_FIELDS = `
   id name createdAt
-  customer { firstName lastName }
+  customer { firstName lastName email }
   shippingAddress { city province zip country }
   shippingLine { title }
   displayFulfillmentStatus displayFinancialStatus note tags
@@ -41,6 +41,7 @@ async function buildSlipFromOrder(
   o: any,
   settings: { dontShipBelow: number; cautionBelow: number },
   shipDate: Date,
+  includeOtherOrders = false,
 ) {
   const orderId = o.id.split("/").pop();
   const shippingMethod = o.shippingLine?.title ?? "";
@@ -91,6 +92,21 @@ async function buildSlipFromOrder(
   // Calculate alert for all orders, but access points/reships ignore danger level
   const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.dontShipBelow, settings.cautionBelow);
 
+  // Other unfulfilled orders from the same customer (only when requested — e.g. printing).
+  let otherOrders: Array<{ id: string; name: string }> = [];
+  const customerEmail = o.customer?.email ?? null;
+  if (includeOtherOrders && customerEmail) {
+    try {
+      const data = await shopifyGraphQL(
+        `query getOtherOrders($q: String!) { orders(first: 20, query: $q) { edges { node { id name } } } }`,
+        { q: `email:"${customerEmail}" fulfillment_status:unfulfilled` },
+      );
+      otherOrders = (data.data?.orders?.edges ?? [])
+        .map((e: any) => ({ id: e.node.id.split("/").pop(), name: e.node.name }))
+        .filter((r: any) => r.id !== orderId);
+    } catch {}
+  }
+
   return {
     order: {
       id: orderId,
@@ -108,7 +124,7 @@ async function buildSlipFromOrder(
         city: addr.city ?? "", province: addr.province ?? "", zip: addr.zip ?? "", country: addr.country ?? "",
       } : null,
       customerName: o.customer ? `${o.customer.firstName ?? ""} ${o.customer.lastName ?? ""}`.trim() : null,
-      shippingMethod, isLocal, isAccessPoint,
+      shippingMethod, isLocal, isAccessPoint, otherOrders,
       isReship: /reship/i.test(shippingMethod),
       lineItems: (o.lineItems?.edges ?? [])
         .filter((e: any) => !/^tip$/i.test(e.node.title?.trim()))
@@ -160,6 +176,7 @@ export async function fetchSlipBatch(
   orderIds: string[],
   settings: { dontShipBelow: number; cautionBelow: number },
   overrideShipDate?: Date,
+  includeOtherOrders = false,
 ): Promise<any[]> {
   if (orderIds.length === 0) return [];
 
@@ -181,7 +198,7 @@ export async function fetchSlipBatch(
     await Promise.all(
       chunk.map(async (o, j) => {
         try {
-          results[i + j] = await buildSlipFromOrder(o, settings, shipDate);
+          results[i + j] = await buildSlipFromOrder(o, settings, shipDate, includeOtherOrders);
         } catch (e) {
           const errorMsg = e instanceof Error ? e.message : String(e);
           const errorStack = e instanceof Error ? e.stack : "";

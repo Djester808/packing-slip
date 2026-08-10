@@ -136,8 +136,9 @@ export default function Settings() {
             <Text as="h2" variant="headingMd">Temperature thresholds</Text>
             <Text as="p" variant="bodySm" tone="subdued">
               Based on the forecast high/low on the estimated delivery day. Heat bands are fixed:
-              85°F or below ships normally, 86–100°F ships in an insulated oversized box, and above
-              100°F is held with a customer email. Cold thresholds are configurable below.
+              85°F or below ships normally, 86–90°F ships in an oversized box, 91–100°F ships in
+              an oversized insulated box, and above 100°F is held with a customer email. Cold
+              thresholds are configurable below.
             </Text>
             <BlockStack gap="300">
               <TextField

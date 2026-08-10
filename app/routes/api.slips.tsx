@@ -10,13 +10,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const shipDateParam = url.searchParams.get("shipDate");
   const overrideShipDate = shipDateParam ? new Date(shipDateParam) : undefined;
+  // Only computed when asked (e.g. printing) — avoids a per-order query during the
+  // heavy "Find shippable orders" sweep.
+  const withOtherOrders = url.searchParams.get("withOtherOrders") === "1";
 
   const settings = await prisma.appSettings.upsert({
     where: { id: "singleton" }, update: {}, create: { id: "singleton" },
   });
 
   try {
-    const slips = await fetchSlipBatch(ids, settings, overrideShipDate);
+    const slips = await fetchSlipBatch(ids, settings, overrideShipDate, withOtherOrders);
     return json(slips);
   } catch (err) {
     console.error("[api/slips] fetchSlipBatch failed:", err);
