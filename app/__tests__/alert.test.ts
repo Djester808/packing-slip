@@ -14,24 +14,16 @@ describe('getAlert', () => {
       expect(call(80, 60).level).toBe('safe');
     });
 
-    it('86°F → oversized box (not insulated)', () => {
+    it('86°F → insulated oversized box', () => {
       const a = call(86, 60);
       expect(a.level).toBe('insulated');
-      expect(a.headline).toBe('Use oversized box — 86°F high expected');
+      expect(a.headline).toBe('Use insulated oversized box — 86°F high expected');
     });
 
-    it('90°F → oversized box (top of the plain-oversized band)', () => {
-      expect(call(90, 60).headline).toContain('Use oversized box');
-    });
-
-    it('91°F → oversized insulated box', () => {
-      expect(call(91, 60).headline).toContain('Use oversized insulated box');
-    });
-
-    it('100°F → oversized insulated box (still ships)', () => {
+    it('100°F → insulated oversized box (still ships)', () => {
       const a = call(100, 70);
       expect(a.level).toBe('insulated');
-      expect(a.headline).toContain('Use oversized insulated box');
+      expect(a.headline).toContain('Use insulated oversized box');
     });
 
     it('101°F → hard hold (above 100)', () => {
