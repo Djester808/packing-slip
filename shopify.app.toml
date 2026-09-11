@@ -6,7 +6,7 @@ embedded = true
 name = "AquaSlip"
 
 [access_scopes]
-scopes = "read_orders,write_orders,read_customers,read_products"
+scopes = "read_orders,write_orders,read_customers,read_products,write_merchant_managed_fulfillment_orders"
 
 [webhooks]
 api_version = "2026-07"

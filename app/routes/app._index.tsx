@@ -29,7 +29,7 @@ export const loader = async (_: LoaderFunctionArgs) => {
     shopifyGraphQL(`
       query($after: String) {
         shop { myshopifyDomain }
-        orders(first: 250, after: $after, query: "fulfillment_status:unfulfilled status:open", sortKey: CREATED_AT, reverse: true) {
+        orders(first: 250, after: $after, query: "(fulfillment_status:unfulfilled OR fulfillment_status:on_hold) status:open", sortKey: CREATED_AT, reverse: true) {
           pageInfo { hasNextPage endCursor }
           edges { node { ${ORDER_FIELDS} } }
         }
@@ -49,7 +49,7 @@ export const loader = async (_: LoaderFunctionArgs) => {
   while (cursor) {
     const nextPage = await shopifyGraphQL(`
       query($after: String) {
-        orders(first: 250, after: $after, query: "fulfillment_status:unfulfilled status:open", sortKey: CREATED_AT, reverse: true) {
+        orders(first: 250, after: $after, query: "(fulfillment_status:unfulfilled OR fulfillment_status:on_hold) status:open", sortKey: CREATED_AT, reverse: true) {
           pageInfo { hasNextPage endCursor }
           edges { node { ${ORDER_FIELDS} } }
         }
@@ -154,8 +154,8 @@ export default function Index() {
     for (let i = 0; i < allIds.length; i += BATCH) {
       const chunk = allIds.slice(i, i + BATCH);
       try {
-        const res = await fetch(`/api/slips?ids=${chunk.join(",")}&shipDate=${encodeURIComponent(shipDate)}`);
-        if (!res.ok) continue;
+        const res = await fetch(`/api/slips?ids=${chunk.join(",")}&shipDate=${encodeURIComponent(shipDate)}`, { method: "POST" });
+        if (!res.ok) throw new Error("Order check failed");
         const slips: any[] = await res.json();
         const returnedIds = new Set(slips.map((s: any) => s.order.id));
         for (const slip of slips) {
@@ -169,6 +169,7 @@ export default function Index() {
             const reasons: string[] = [];
             if (isWeekend) reasons.push(`Too long in transit — would arrive after the weekend (est. ${slip.weather.deliveryDate})`);
             if (isDanger) reasons.push(`Weather — ${slip.alert.headline}`);
+            if (slip.weatherHold?.status === "failed") reasons.push(slip.weatherHold.message);
             heldReason.set(slip.order.id, reasons.join("; "));
           }
         }
@@ -178,7 +179,9 @@ export default function Index() {
             if (orderInfo && !orderInfo.isLocal) heldReason.set(id, "Unable to check forecast — verify before shipping");
           }
         }
-      } catch {}
+      } catch {
+        for (const id of chunk) heldReason.set(id, "Unable to check weather or confirm Shopify hold. Retry before shipping.");
+      }
     }
 
     // Held orders for the hold list.

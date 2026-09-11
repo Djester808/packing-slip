@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { fetchSlip } from "../slip.server";
 import { sendWeatherDelayEmail } from "../weather-email.server";
 import prisma from "../db.server";
+import { ensureWeatherHold } from "../weather-hold.server";
 
 const WEBHOOK_SECRET = process.env.SHOPIFY_WEBHOOK_SECRET;
 
@@ -69,6 +70,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       console.log(`[Webhook] Order ${orderName} not found`);
       return json({ status: "order_not_found" });
     }
+
+    await ensureWeatherHold(slip);
 
     // Send email if there's a danger alert (but not for reships/access points—they ship regardless)
     if (slip.alert && slip.alert.level === "danger" && !slip.order.isReship && !slip.order.isAccessPoint) {

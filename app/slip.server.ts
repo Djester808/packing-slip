@@ -13,7 +13,7 @@ export function isLocalShipping(method: string) {
 const SLIP_ORDER_FIELDS = `
   id name createdAt
   customer { firstName lastName email }
-  shippingAddress { city province zip country }
+  shippingAddress { firstName lastName company address1 address2 city province zip country }
   shippingLine { title }
   displayFulfillmentStatus displayFinancialStatus note tags
   lineItems(first: 40) {

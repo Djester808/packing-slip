@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { useLoaderData, useNavigate, useNavigation } from "@remix-run/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { shopifyGraphQL } from "../admin-api.server";
 import { getShopMeta } from "../shop.server";
 import { getTempRange, addBusinessDays, toDateString, nextShipDate } from "../weather.server";
@@ -198,6 +198,28 @@ const ALERT_ICON: Record<string, string> = {
 
 export default function PackingSlip() {
   const { order, weather, alert, shopLogoUrl, shopName, nav, otherOrders, shipDate, shopDomain } = useLoaderData<typeof loader>();
+  const [weatherHoldMessage, setWeatherHoldMessage] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    setWeatherHoldMessage('');
+    if (alert?.level !== 'danger' || order.isLocal || order.isReship) return;
+    setWeatherHoldMessage('Checking Shopify weather hold…');
+    const params = new URLSearchParams(window.location.search);
+    const query = new URLSearchParams({ ids: order.id });
+    if (params.has('shipDate')) query.set('shipDate', params.get('shipDate')!);
+    fetch(`/api/slips?${query}`, { method: 'POST' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Weather hold request failed');
+        const slips = await response.json();
+        const result = slips.find((slip: any) => slip.order.id === order.id)?.weatherHold;
+        if (!result || result.status === 'failed') throw new Error('Weather hold failed');
+        if (!cancelled) setWeatherHoldMessage(result.status === 'held' ? 'On hold in Shopify — weather delay.' : '');
+      })
+      .catch(() => {
+        if (!cancelled) setWeatherHoldMessage('Shopify weather hold failed. Do not ship; retry or hold this order manually in Shopify.');
+      });
+    return () => { cancelled = true; };
+  }, [order.id, order.isLocal, order.isReship, alert?.level, shipDate]);
   const navigate = useNavigate();
   const navigation = useNavigation();
   const isLoading = navigation.state === "loading" && navigation.location?.pathname.startsWith("/app/slip");
@@ -285,6 +307,7 @@ export default function PackingSlip() {
           </div>
         )}
 
+        {weatherHoldMessage && <p role="status" style={{ fontWeight: 700 }}>{weatherHoldMessage}</p>}
         {/* Always shown (even on do-not-ship/rolled orders) — combining matters most when holding */}
         {otherOrders.length > 0 && (
           <div className="slip-banner" style={{ background: "#fff0f0", border: "1px solid #d72c0d", borderRadius: "6px", padding: "10px 14px", marginBottom: "12px" }}>
