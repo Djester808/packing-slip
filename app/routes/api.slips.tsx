@@ -3,6 +3,7 @@ import { json } from "@remix-run/node";
 import { fetchSlipBatch } from "../slip.server";
 import prisma from "../db.server";
 import { authenticate } from "../shopify.server";
+import { shopifyGraphQL } from "../admin-api.server";
 import { ensureWeatherHold } from "../weather-hold.server";
 
 async function loadSlips(request: Request, applyHolds = false) {
@@ -43,7 +44,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => loadSlips(reque
 
 export const action = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  if (session.shop !== process.env.SHOPIFY_STORE_DOMAIN) return json({ error: "Wrong shop" }, { status: 403 });
+  if (session.shop !== process.env.SHOPIFY_STORE_DOMAIN) {
+    // Shopify session tokens use the canonical domain; the configured domain may be an alias.
+    const response = await shopifyGraphQL('query WeatherHoldShop { shop { myshopifyDomain } }');
+    if (response.errors?.length || session.shop !== response.data?.shop?.myshopifyDomain) {
+      return json({ error: 'Wrong shop' }, { status: 403 });
+    }
+  }
   if (request.method !== 'POST') return json({ error: 'Method not allowed' }, { status: 405 });
   return loadSlips(request, true);
 };
