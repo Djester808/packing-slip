@@ -176,7 +176,6 @@ function SlipView({ slip, shopLogoUrl, shopName }: { slip: any; shopLogoUrl: str
           </div>
         )}
 
-        {slip.weatherHold?.status === "failed" && <p role="alert" style={{ fontWeight: 700 }}>{slip.weatherHold.message}</p>}
         {!doNotShip && weather && alert && (
           <div className={`slip-banner ${alert.level === "danger" ? "slip-banner--strong" : ""}`} style={{ background: alert.bg, border: `1px solid ${alert.color}`, borderRadius: "6px", padding: "10px 14px", marginBottom: "14px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: alert.color }}>
@@ -314,10 +313,9 @@ export default function PrintBatch() {
       await Promise.all(chunks.map(async (chunk) => {
         if (cancelled) return;
         try {
-          const res = await fetch(`/api/slips?ids=${chunk.join(",")}${shipDate ? `&shipDate=${encodeURIComponent(shipDate)}` : ""}&withOtherOrders=1`, { method: "POST" });
+          const res = await fetch(`/api/slips?ids=${chunk.join(",")}${shipDate ? `&shipDate=${encodeURIComponent(shipDate)}` : ""}&withOtherOrders=1`);
           if (res.ok && !cancelled) {
             const batch: any[] = await res.json();
-            if (batch.some((s) => s.weatherHold?.status === "failed")) setLoadError(true);
             if (!cancelled) {
               batch.filter((s) => s && (printLocalOrders || !s.order.isLocal)).forEach((s) => allSlips.push(s));
             }

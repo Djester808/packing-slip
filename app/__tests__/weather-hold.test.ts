@@ -1,4 +1,4 @@
-import { ensureWeatherHold, needsWeatherHold, type WeatherSlip } from '../weather-hold.server';
+import { ensureWeatherHold, ensureNewOrderWeatherHold, WEATHER_HOLDS_START_AT, needsWeatherHold, type WeatherSlip } from '../weather-hold.server';
 import { shopifyGraphQL } from '../admin-api.server';
 import { getAlert } from '../alert';
 
@@ -75,4 +75,13 @@ it('surfaces a rejected mutation instead of claiming a hold', async () => {
 it('requires retry when fulfillment routing is not ready', async () => {
   graphql.mockResolvedValueOnce(page([]));
   await expect(ensureWeatherHold(slip())).rejects.toThrow('routing is not ready');
+});
+
+it.each(['2026-09-10T12:00:00Z', 'invalid', undefined, null])('ignores existing or undated orders (%s), even on webhook retry', async (createdAt) => {
+  expect(await ensureNewOrderWeatherHold(slip(), createdAt)).toEqual({ status: 'not_required' });
+  expect(graphql).not.toHaveBeenCalled();
+});
+it('holds a newly created order at the activation boundary', async () => {
+  graphql.mockResolvedValueOnce(page([fo()])).mockResolvedValueOnce(held);
+  expect(await ensureNewOrderWeatherHold(slip(), WEATHER_HOLDS_START_AT)).toEqual({ status: 'held' });
 });

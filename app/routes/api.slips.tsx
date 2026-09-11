@@ -2,11 +2,8 @@ import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { fetchSlipBatch } from "../slip.server";
 import prisma from "../db.server";
-import { authenticate } from "../shopify.server";
-import { shopifyGraphQL } from "../admin-api.server";
-import { ensureWeatherHold } from "../weather-hold.server";
 
-async function loadSlips(request: Request, applyHolds = false) {
+export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const ids = url.searchParams.get("ids")?.split(",").filter(Boolean) ?? [];
   if (ids.length === 0) return json([]);
@@ -23,34 +20,12 @@ async function loadSlips(request: Request, applyHolds = false) {
 
   try {
     const slips = await fetchSlipBatch(ids, settings, overrideShipDate, withOtherOrders);
-    if (applyHolds) {
-      for (const slip of slips) {
-        try {
-          slip.weatherHold = await ensureWeatherHold(slip);
-        } catch (error) {
-          console.error('[Weather hold]', slip.order.id, error);
-          slip.weatherHold = { status: 'failed', message: 'Shopify weather hold failed. Do not ship; retry or hold this order manually in Shopify.' };
-        }
-      }
-    }
     return json(slips);
   } catch (err) {
     console.error("[api/slips] fetchSlipBatch failed:", err);
     return json({ error: "Failed to load slip data" }, { status: 500 });
   }
-}
-
-export const loader = async ({ request }: LoaderFunctionArgs) => loadSlips(request);
-
-export const action = async ({ request }: LoaderFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
-  if (session.shop !== process.env.SHOPIFY_STORE_DOMAIN) {
-    // Shopify session tokens use the canonical domain; the configured domain may be an alias.
-    const response = await shopifyGraphQL('query WeatherHoldShop { shop { myshopifyDomain } }');
-    if (response.errors?.length || session.shop !== response.data?.shop?.myshopifyDomain) {
-      return json({ error: 'Wrong shop' }, { status: 403 });
-    }
-  }
-  if (request.method !== 'POST') return json({ error: 'Method not allowed' }, { status: 405 });
-  return loadSlips(request, true);
 };
+
+// Older open app tabs may still POST; serve slip data without changing Shopify.
+export const action = loader;

@@ -76,3 +76,13 @@ export async function ensureWeatherHold(slip: WeatherSlip): Promise<WeatherHoldR
   }
   return { status: 'held' };
 }
+
+// Only orders created after the merchant enabled new-order-only holds are eligible.
+export const WEATHER_HOLDS_START_AT = '2026-09-11T03:29:57Z';
+export async function ensureNewOrderWeatherHold(slip: WeatherSlip, createdAt: unknown): Promise<WeatherHoldResult> {
+  const created = typeof createdAt === 'string' ? Date.parse(createdAt) : NaN;
+  if (!Number.isFinite(created) || created < Date.parse(WEATHER_HOLDS_START_AT)) {
+    return { status: 'not_required' };
+  }
+  return ensureWeatherHold(slip);
+}

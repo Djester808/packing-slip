@@ -154,7 +154,7 @@ export default function Index() {
     for (let i = 0; i < allIds.length; i += BATCH) {
       const chunk = allIds.slice(i, i + BATCH);
       try {
-        const res = await fetch(`/api/slips?ids=${chunk.join(",")}&shipDate=${encodeURIComponent(shipDate)}`, { method: "POST" });
+        const res = await fetch(`/api/slips?ids=${chunk.join(",")}&shipDate=${encodeURIComponent(shipDate)}`);
         if (!res.ok) throw new Error("Order check failed");
         const slips: any[] = await res.json();
         const returnedIds = new Set(slips.map((s: any) => s.order.id));
@@ -169,7 +169,6 @@ export default function Index() {
             const reasons: string[] = [];
             if (isWeekend) reasons.push(`Too long in transit — would arrive after the weekend (est. ${slip.weather.deliveryDate})`);
             if (isDanger) reasons.push(`Weather — ${slip.alert.headline}`);
-            if (slip.weatherHold?.status === "failed") reasons.push(slip.weatherHold.message);
             heldReason.set(slip.order.id, reasons.join("; "));
           }
         }
@@ -180,7 +179,7 @@ export default function Index() {
           }
         }
       } catch {
-        for (const id of chunk) heldReason.set(id, "Unable to check weather or confirm Shopify hold. Retry before shipping.");
+        for (const id of chunk) heldReason.set(id, "Unable to check weather. Retry before shipping.");
       }
     }
 
