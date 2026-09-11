@@ -167,7 +167,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       shipRestriction,
       holidayTuesdays,
       // dontShipAbove/icePackAbove kept for the storefront widget's hot-vs-cold split,
-      // mapped to the fixed heat bands (hot risk > 100, hot caution > 85).
+      // mapped to the fixed heat bands (hot risk > 90, hot caution > 85).
       thresholds: { dontShipAbove: INSULATED_MAX_F, icePackAbove: SAFE_MAX_F + 1, dontShipBelow, cautionBelow, heatPackBelow },
       sources: nwsAvailable ? ["Open-Meteo", "NWS"] : ["Open-Meteo"],
       forecast,

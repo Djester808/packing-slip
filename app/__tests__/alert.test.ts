@@ -1,7 +1,7 @@
 import { getAlert } from '../alert';
 
 describe('getAlert', () => {
-  // Heat bands are fixed: ≤85 safe, 86–100 insulated box, >100 hard hold.
+  // Heat bands are fixed: ≤85 safe, 86–90 oversized box, >90 hard hold.
   // Only cold thresholds are passed (dontShipBelow=35, cautionBelow=45).
   const call = (hi: number | null, lo: number | null) => getAlert(hi, lo, 35, 45);
 
@@ -14,20 +14,21 @@ describe('getAlert', () => {
       expect(call(80, 60).level).toBe('safe');
     });
 
-    it('86°F → insulated oversized box', () => {
+    it('86°F → oversized box', () => {
       const a = call(86, 60);
       expect(a.level).toBe('insulated');
-      expect(a.headline).toBe('Use insulated oversized box — 86°F high expected');
+      expect(a.headline).toBe('Use oversized box — 86°F high expected');
+      expect(a.body).toContain('Pack in an oversized box with an ice pack');
     });
 
-    it('100°F → insulated oversized box (still ships)', () => {
-      const a = call(100, 70);
+    it('90°F → oversized box (still ships)', () => {
+      const a = call(90, 70);
       expect(a.level).toBe('insulated');
-      expect(a.headline).toContain('Use insulated oversized box');
+      expect(a.headline).toContain('Use oversized box');
     });
 
-    it('101°F → hard hold (above 100)', () => {
-      const a = call(101, 70);
+    it.each([91, 100, 101])('%i°F → hard hold (above 90)', (high) => {
+      const a = call(high, 70);
       expect(a.level).toBe('danger');
       expect(a.headline).toContain('Do not ship');
     });
@@ -40,9 +41,13 @@ describe('getAlert', () => {
       expect(call(85.5, 60).level).toBe('insulated');
     });
 
-    it('rounds 100.4°F down to 100 → insulated (not held)', () => {
-      expect(call(100.4, 70).level).toBe('insulated');
+    it('rounds 90.4°F down to 90 → insulated (not held)', () => {
+      expect(call(90.4, 70).level).toBe('insulated');
     });
+  });
+
+  it('rounds 90.5°F up to 91 → hard hold', () => {
+    expect(call(90.5, 70).level).toBe('danger');
   });
 
   describe('cold thresholds', () => {
