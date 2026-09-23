@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { weatherRecheckDay, weatherShippingDay } from "./weather-recheck";
 
 let _transporter: ReturnType<typeof nodemailer.createTransport> | null = null;
 
@@ -18,26 +19,27 @@ function makeTransporter() {
   return _transporter;
 }
 
-export async function sendWeatherDelayEmail(
-  email: string,
+export function buildWeatherDelayEmail(
   firstName: string,
   orderName: string,
   logoUrl?: string,
-  deliveryDate?: string,
+  _deliveryDate?: string,
   maxTempF?: number | null,
   shippingMethod?: string,
-): Promise<boolean> {
-  try {
+  time = new Date(),
+): string {
+    const recheckDay = weatherRecheckDay(time);
+    const shippingDay = weatherShippingDay(time);
+    const replySubject = encodeURIComponent(`Access Point Address for Order ${orderName}`);
     const logoHtml = logoUrl ? `<div style="margin-bottom:16px;"><img src="${logoUrl}" alt="Superior Shrimp & Aquatics" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.25);display:block;margin:0 auto;" /></div>` : "";
-    const deliveryHtml = deliveryDate ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Estimated Delivery:</strong> ${deliveryDate}</p>` : "";
-    const tempHtml = maxTempF ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Estimated Temp:</strong> ${Math.round(maxTempF)}°F</p>` : "";
+    const tempHtml = maxTempF != null && Number.isFinite(maxTempF) ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Forecast temperature:</strong> ${Math.round(maxTempF)}°F</p>` : "";
     const speedHtml = shippingMethod ? `<p style="font-size:15px; line-height:1.6; color:#6b6060; margin:0 0 18px 0;"><strong>Shipping Method:</strong> ${shippingMethod}</p>` : "";
 
     const html = `<!-- Superior Shrimp & Aquatics - Weather Delay Email -->
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0; padding:0; background-color:#f7f3ee;">
   <tr>
     <td align="center" style="padding:24px 12px;">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px; max-width:600px; background-color:#ffffff; border-radius:14px; overflow:hidden; border:1px solid #e8e2da;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%; max-width:600px; background-color:#ffffff; border-radius:14px; overflow:hidden; border:1px solid #e8e2da;">
         <tr>
           <td style="background-color:#b50707; background-image:linear-gradient(160deg,#b50707 0%,#F40909 100%); padding:32px 36px; text-align:center;">
             ${logoHtml}
@@ -47,20 +49,24 @@ export async function sendWeatherDelayEmail(
         </tr>
         <tr>
           <td style="padding:36px 36px 8px 36px; font-family:'DM Sans',Arial,sans-serif;">
-            <p style="font-family:'Playfair Display',Georgia,serif; font-size:22px; font-weight:600; color:#1e1a1a; margin:0 0 18px 0;">Thank you for your order, ${firstName}!</p>
-            <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">Currently, the temperatures in your area are above our safety threshold for shipping live animals. We don't want your shipment sitting on a hot truck all day, so to get it out to you this week, we would need to route it to a <strong style="color:#111111;">UPS Access Point</strong> near you for pickup.</p>
-            ${deliveryHtml}
+            <p style="font-family:'Playfair Display',Georgia,serif; font-size:22px; font-weight:600; color:#1e1a1a; margin:0 0 18px 0;">Hi ${firstName},</p>
+            <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">Thank you for your order! We're sorry for the delay, but the forecast for your delivery is outside our safe shipping temperatures. We've placed order <strong>${orderName}</strong> on a weather hold to help your animals arrive safely.</p>
             ${tempHtml}
             ${speedHtml}
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px 0;">
               <tr>
                 <td style="background-color:#fff0f0; border-left:4px solid #F40909; border-radius:10px; padding:14px 18px;">
-                  <p style="font-size:14px; line-height:1.6; color:#1e1a1a; margin:0;">This affects order <strong style="color:#b50707;">${orderName}</strong>. Live animals only ship when conditions are safe, so we are pausing it until we hear from you.</p>
+                  <p style="font-size:14px; line-height:1.6; color:#1e1a1a; margin:0;">This affects order <strong style="color:#b50707;">${orderName}</strong>. Your order is on a weather hold while we wait for safe shipping conditions.</p>
                 </td>
               </tr>
             </table>
-            <p style="font-size:12px; font-weight:500; letter-spacing:0.12em; text-transform:uppercase; color:#b50707; margin:0 0 4px 0;">What To Do</p>
-            <p style="font-family:'Playfair Display',Georgia,serif; font-size:19px; font-weight:600; color:#1e1a1a; margin:0 0 18px 0;">Find a UPS Access Point Near You</p>
+            <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">You have two options:</p>
+            <p style="font-family:'Playfair Display',Georgia,serif; font-size:19px; font-weight:600; color:#1e1a1a; margin:0 0 18px 0;">1. Keep your current address and wait for better weather</p>
+            <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">No reply is needed. We'll reevaluate the forecast on <strong style="color:#111111;">${recheckDay} at 4:00 PM Central</strong> for the following shipping day.</p>
+            <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">If conditions improve enough to release the hold, we'll email you an update and do our best to get your order out on <strong style="color:#111111;">${shippingDay}</strong>. Otherwise, your order will remain on hold while we continue checking.</p>
+            <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">We ship Monday, Tuesday, and Wednesday, with weather checks at 4:00 PM Central the day before each shipping day.</p>
+            <p style="font-family:'Playfair Display',Georgia,serif; font-size:19px; font-weight:600; color:#1e1a1a; margin:0 0 18px 0;">2. Request pickup at a UPS Store</p>
+            <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">Pickup may help us ship sooner by keeping your package from sitting on a delivery truck all day.</p>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 10px 0;">
               <tr>
                 <td width="40" valign="top" style="padding-top:2px;">
@@ -82,31 +88,38 @@ export async function sendWeatherDelayEmail(
                 <td width="40" valign="top" style="padding-top:2px;">
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="28" height="28" align="center" valign="middle" style="background-color:#F40909; border-radius:50%; font-family:'DM Sans',Arial,sans-serif; font-size:13px; font-weight:700; color:#ffffff; line-height:28px;">3</td></tr></table>
                 </td>
-                <td valign="top" style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.6; color:#6b6060;"><strong style="color:#111111;">Choose only an official UPS Store location</strong> — not CVS, Michaels, Walgreens, or other retailers. Copy down the <strong style="color:#111111;">full street address</strong>.</td>
+                <td valign="top" style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.6; color:#6b6060;"><strong style="color:#111111;">Choose only an official UPS Store location</strong>, not CVS, Michaels, Walgreens, or other retailers. Contact the store to confirm they'll accept your package.</td>
               </tr>
             </table>
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px 0;">
               <tr>
                 <td style="background-color:#f7f3ee; border:1px solid #e8e2da; border-radius:12px; padding:22px 22px;">
                   <p style="font-family:'Playfair Display',Georgia,serif; font-size:17px; font-weight:600; color:#1e1a1a; margin:0 0 8px 0;">Reply with your pickup address and phone number</p>
-                  <p style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.65; color:#6b6060; margin:0 0 16px 0;">Once you have it, reply to this email with the full UPS Store street address and your phone number. We will get your order shipped there. Prefer to wait? We can hold your order and reevaluate shipping next week instead.</p>
+                  <ul style="font-family:'DM Sans',Arial,sans-serif; font-size:14px; line-height:1.65; color:#6b6060; margin:0 0 16px 0; padding-left:20px;">
+                    <li>The full UPS Store street address, including any suite number, city, state, and ZIP code.</li>
+                    <li>Your phone number.</li>
+                    <li>Confirmation that the store will accept your package.</li>
+                    <li>Your permission to change your order's shipping address.</li>
+                  </ul>
                   <table role="presentation" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                       <td align="center" style="background-color:#F40909; border-radius:8px;">
-                        <a href="mailto:support@superiorshrimpaquatics.com?subject=Access%20Point%20Address%20for%20Order%20${orderName}" style="display:inline-block; font-family:'DM Sans',Arial,sans-serif; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; padding:13px 28px;">Reply With My Address</a>
+                        <a href="mailto:support@superiorshrimpaquatics.com?subject=${replySubject}" style="display:inline-block; font-family:'DM Sans',Arial,sans-serif; font-size:15px; font-weight:600; color:#ffffff; text-decoration:none; padding:13px 28px;">Reply With My Address</a>
                       </td>
                     </tr>
                   </table>
-                  <p style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; line-height:1.5; color:#80666b; margin:14px 0 0 0;">Please let us know as soon as you can, otherwise your order may be delayed.</p>
+                  <p style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; line-height:1.5; color:#80666b; margin:14px 0 0 0;">Only reply if you'd like to update your delivery location or have a question. We'll keep checking the forecast if you prefer to wait.</p>
                 </td>
               </tr>
             </table>
+            <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">Thank you for your patience while we wait for safer conditions. If you have any questions, just reply and we'll help.</p>
+            <p style="font-size:15px; line-height:1.7; color:#6b6060; margin:0 0 18px 0;">John - Owner<br/>Superior Shrimp &amp; Aquatics<br/><a href="https://www.superiorshrimpaquatics.com" style="color:#b50707;">www.superiorshrimpaquatics.com</a></p>
           </td>
         </tr>
         <tr>
           <td style="background-color:#111111; padding:28px 36px; text-align:center;">
             <p style="font-family:'Playfair Display',Georgia,serif; font-size:16px; font-weight:600; color:#ffffff; margin:0 0 6px 0;">Superior Shrimp & Aquatics</p>
-            <p style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; line-height:1.6; color:#b8aeae; margin:0 0 16px 0;">Thank you for supporting a small, family-run business.</p>
+            <p style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; line-height:1.6; color:#b8aeae; margin:0 0 16px 0;">This is an automated weather-hold notice from Superior Shrimp &amp; Aquatics. Replies come directly to our team.</p>
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto 16px auto;">
               <tr>
                 <td style="padding:0 9px;"><a href="https://www.facebook.com/p/Superior-Shrimp-Aquatics-61553268254349/" style="font-family:'DM Sans',Arial,sans-serif; font-size:12px; font-weight:500; color:#ff8a8a; text-decoration:none;">Facebook</a></td>
@@ -127,10 +140,25 @@ export async function sendWeatherDelayEmail(
   </tr>
 </table>`;
 
+  return html;
+}
+
+export async function sendWeatherDelayEmail(
+  email: string,
+  firstName: string,
+  orderName: string,
+  logoUrl?: string,
+  deliveryDate?: string,
+  maxTempF?: number | null,
+  shippingMethod?: string,
+): Promise<boolean> {
+  try {
+    const html = buildWeatherDelayEmail(firstName, orderName, logoUrl, deliveryDate, maxTempF, shippingMethod);
+
     await makeTransporter().sendMail({
       from: process.env.OUTLOOK_EMAIL,
       to: email,
-      subject: `Your order ${orderName} — Weather delay`,
+      subject: `Weather hold on your order ${orderName}`,
       html,
     });
 
