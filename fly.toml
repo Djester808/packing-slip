@@ -3,6 +3,10 @@ primary_region = "ord"
 
 [build]
 
+[[mounts]]
+  source = "packing_data"
+  destination = "/data"
+
 [env]
   NODE_ENV = "production"
   PORT = "3000"
