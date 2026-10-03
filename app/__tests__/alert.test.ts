@@ -2,8 +2,8 @@ import { getAlert } from '../alert';
 
 describe('getAlert', () => {
   // Heat bands are fixed: ≤85 safe, 86–90 oversized box, >90 hard hold.
-  // Only cold thresholds are passed (dontShipBelow=35, cautionBelow=45).
-  const call = (hi: number | null, lo: number | null) => getAlert(hi, lo, 35, 45);
+  // Only heat-pack caution is configurable.
+  const call = (hi: number | null, lo: number | null) => getAlert(hi, lo, 45);
 
   describe('heat bands', () => {
     it('85°F → safe', () => {
@@ -51,14 +51,28 @@ describe('getAlert', () => {
   });
 
   describe('cold thresholds', () => {
-    it('35°F low → danger', () => {
-      const a = call(50, 35);
+    it.each([-10, -1, -0.1])('%s°F low → danger', (low) => {
+      const a = call(50, low);
       expect(a.level).toBe('danger');
-      expect(a.headline).toContain('35°F');
+      expect(a.headline).toContain(String(low) + '°F');
     });
 
-    it('36°F low → not danger', () => {
-      expect(call(50, 36).level).not.toBe('danger');
+    it.each([0, 0.1, 20, 32])('%s°F low → ship insulated', (low) => {
+      const a = call(50, low);
+      expect(a.level).toBe('insulated');
+      expect(a.headline).toBe('Ship in insulated box — ' + low + '°F low expected');
+    });
+
+    it.each([32.1, 33, 35, 36])('%s°F low → heat-pack caution, not hold', (low) => {
+      expect(call(50, low).level).toBe('caution');
+    });
+
+    it('retains extreme heat holds even with a freezing low', () => {
+      expect(call(91, 32).level).toBe('danger');
+    });
+
+    it('insulates freezing lows even when heat-pack caution is set lower', () => {
+      expect(getAlert(50, 32, 10).level).toBe('insulated');
     });
 
     it('45°F low → heat pack caution', () => {

@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { geocodeZip, nextShipDate, toDateString, HOLIDAY_DATES } from "../weather.server";
-import { SAFE_MAX_F, INSULATED_MAX_F } from "../alert";
+import { SAFE_MAX_F, INSULATED_MAX_F, COLD_HOLD_BELOW_F, COLD_INSULATED_MAX_F } from "../alert";
 import prisma from "../db.server";
 
 const CORS = {
@@ -90,9 +90,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const nwsAvailable = nws.size > 0;
 
   const settings = await prisma.appSettings.findUnique({ where: { id: "singleton" } });
-  const dontShipBelow = settings?.dontShipBelow ?? 35;
+  const dontShipBelow = COLD_HOLD_BELOW_F;
   const cautionBelow  = settings?.cautionBelow  ?? 45;
-  const heatPackBelow = 32;
+  const heatPackBelow = COLD_INSULATED_MAX_F;
 
   const { date: shipDate, isWednesdayOnly } = nextShipDate();
   const shipDateStr = toDateString(shipDate);
@@ -120,8 +120,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const isShipDay = date === shipDateStr;
     const isDeliveryDay = transitWindowDates.slice(1).includes(date);
     let classification: "safe" | "caution" | "risk" = "safe";
-    if (high > INSULATED_MAX_F || low <= dontShipBelow) classification = "risk";
-    else if (high > SAFE_MAX_F || low <= cautionBelow) classification = "caution";
+    if (high > INSULATED_MAX_F || low < dontShipBelow) classification = "risk";
+    else if (high > SAFE_MAX_F || low <= Math.max(cautionBelow, COLD_INSULATED_MAX_F)) classification = "caution";
 
     return {
       date, high, low, isShipDay, isDeliveryDay, classification,

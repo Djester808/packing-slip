@@ -111,7 +111,7 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
     }
   }
 
-  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.dontShipBelow, settings.cautionBelow);
+  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.cautionBelow);
 
   const lineItems = (o.lineItems?.edges ?? [])
     .filter((e: any) => !/^tip$/i.test(e.node.title?.trim()))

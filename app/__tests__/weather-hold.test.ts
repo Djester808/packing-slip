@@ -6,7 +6,7 @@ jest.mock('../admin-api.server', () => ({ shopifyGraphQL: jest.fn() }));
 const graphql = jest.mocked(shopifyGraphQL);
 const slip = (high = 91, low = 60): WeatherSlip => ({
   order: { id: '123', isLocal: false, isAccessPoint: false, isReship: false },
-  alert: getAlert(high, low, 35, 45), weather: { deliveryDate: 'September 14, 2026' },
+  alert: getAlert(high, low, 45), weather: { deliveryDate: 'September 14, 2026' },
 });
 const fo = (id = 'fo1', status = 'OPEN', fulfillmentHolds: any[] = []) => ({ id, status, fulfillmentHolds });
 const page = (nodes: any[], next = false) => ({ data: { order: { fulfillmentOrders: {
@@ -27,10 +27,10 @@ it.each(['isAccessPoint', 'isReship', 'isLocal'] as const)('preserves the %s exe
   expect(graphql).not.toHaveBeenCalled();
 });
 it('does not hold when the forecast is unavailable', () => {
-  const input = slip(); input.alert = getAlert(null, null, 35, 45);
+  const input = slip(); input.alert = getAlert(null, null, 45);
   expect(needsWeatherHold(input)).toBe(false);
 });
-it.each([[91, 60], [100, 60], [75, 35]])('holds dangerous weather (%i high, %i low) with a weather reason', async (high, low) => {
+it.each([[91, 60], [100, 60], [30, -1], [30, -0.1]])('holds dangerous weather (%i high, %i low) with a weather reason', async (high, low) => {
   graphql.mockResolvedValueOnce(page([fo()])).mockResolvedValueOnce(held);
   expect(await ensureWeatherHold(slip(high, low))).toEqual({ status: 'held' });
   expect(graphql.mock.calls[1][1]).toEqual({ id: 'fo1', hold: {
@@ -84,4 +84,9 @@ it.each(['2026-09-10T12:00:00Z', 'invalid', undefined, null])('ignores existing 
 it('holds a newly created order at the activation boundary', async () => {
   graphql.mockResolvedValueOnce(page([fo()])).mockResolvedValueOnce(held);
   expect(await ensureNewOrderWeatherHold(slip(), WEATHER_HOLDS_START_AT)).toEqual({ status: 'held' });
+});
+
+it.each([0, 20, 32, 35])('does not hold an order with a %s°F low', async (low) => {
+  expect(await ensureWeatherHold(slip(50, low))).toEqual({ status: 'not_required' });
+  expect(graphql).not.toHaveBeenCalled();
 });

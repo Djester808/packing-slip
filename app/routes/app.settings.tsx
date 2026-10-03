@@ -20,11 +20,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = form.get("intent") as string;
 
   if (intent === "save-thresholds") {
-    // Heat bands (85 / 86–90 / >90) are fixed in code; only cold thresholds are configurable.
-    const dontShipBelow = parseInt(form.get("dontShipBelow") as string);
+    // Hold and box bands are fixed; heat-pack caution remains configurable.
     const cautionBelow  = parseInt(form.get("cautionBelow")  as string);
     const data = {
-      ...(isFinite(dontShipBelow) && { dontShipBelow }),
       ...(isFinite(cautionBelow)  && { cautionBelow }),
     };
     await prisma.appSettings.upsert({
@@ -80,7 +78,6 @@ export default function Settings() {
   const isSaving = fetcher.state !== "idle";
   const saved = fetcher.state === "idle" && (fetcher.data as any)?.ok;
 
-  const [dontShipBelow, setDontShipBelow] = useState(String(settings.dontShipBelow));
   const [cautionBelow, setCautionBelow] = useState(String(settings.cautionBelow));
   const [printLocalOrders, setPrintLocalOrders] = useState(settings.printLocalOrders);
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || "");
@@ -137,18 +134,9 @@ export default function Settings() {
             <Text as="p" variant="bodySm" tone="subdued">
               Based on the forecast high/low on the estimated delivery day. Heat bands are fixed:
               85°F or below ships normally, 86–90°F ships in an oversized box, and above
-              90°F is held with a customer email. Cold thresholds are configurable below.
+              90°F is held with a customer email. Delivery-day lows of 0–32°F ship in an insulated box; below 0°F is held. Heat-pack caution is configurable below.
             </Text>
             <BlockStack gap="300">
-              <TextField
-                label="Do not ship below (°F)"
-                name="dontShipBelow"
-                type="number"
-                value={dontShipBelow}
-                onChange={setDontShipBelow}
-                helpText="Red alert — low too cold, hold the shipment"
-                autoComplete="off"
-              />
               <TextField
                 label="Heat pack caution below (°F)"
                 name="cautionBelow"
@@ -163,7 +151,7 @@ export default function Settings() {
                   loading={isSaving}
                   variant="primary"
                   onClick={() => fetcher.submit(
-                    { intent: "save-thresholds", dontShipBelow, cautionBelow },
+                    { intent: "save-thresholds", cautionBelow },
                     { method: "post" },
                   )}
                 >

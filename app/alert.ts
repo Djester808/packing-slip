@@ -14,11 +14,12 @@ export interface ShipAlert {
 //   > 90°F        → hard hold + email
 export const SAFE_MAX_F = 85;
 export const INSULATED_MAX_F = 90;
+export const COLD_HOLD_BELOW_F = 0;
+export const COLD_INSULATED_MAX_F = 32;
 
 export function getAlert(
   maxTempF: number | null,
   minTempF: number | null,
-  dontShipBelow: number,
   cautionBelow: number,
 ): ShipAlert {
   if (maxTempF === null) {
@@ -32,7 +33,7 @@ export function getAlert(
   }
 
   const high = Math.round(maxTempF);
-  const low  = minTempF !== null ? Math.round(minTempF) : null;
+  const low = minTempF; // Do not round a subzero low up to 0°F.
 
   // Extreme heat (above 90°F) → hard hold (and notify the customer).
   if (high > INSULATED_MAX_F) {
@@ -45,11 +46,21 @@ export function getAlert(
     };
   }
 
-  if (low !== null && low <= dontShipBelow) {
+  if (low !== null && low < COLD_HOLD_BELOW_F) {
     return {
       level: "danger",
       headline: `Do not ship — ${low}°F low expected`,
       body: `A low of ${low}°F is forecast for the estimated delivery day. Temperatures are too cold for safe transit. Hold the shipment or contact the customer to arrange a safer ship date.`,
+      color: "#1e6fbf",
+      bg: "#f0f5ff",
+    };
+  }
+
+  if (low !== null && low <= COLD_INSULATED_MAX_F) {
+    return {
+      level: "insulated",
+      headline: `Ship in insulated box — ${low}°F low expected`,
+      body: `A low of ${low}°F is forecast for the estimated delivery day. Ship in an insulated box to protect against cold in transit.`,
       color: "#1e6fbf",
       bg: "#f0f5ff",
     };

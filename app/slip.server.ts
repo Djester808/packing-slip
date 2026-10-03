@@ -39,7 +39,7 @@ function lineItemCollections(node: any): Array<{ handle?: string | null; title?:
 
 async function buildSlipFromOrder(
   o: any,
-  settings: { dontShipBelow: number; cautionBelow: number },
+  settings: { cautionBelow: number },
   shipDate: Date,
   includeOtherOrders = false,
 ) {
@@ -90,7 +90,7 @@ async function buildSlipFromOrder(
   if (taggedAsAP) console.log(`[AP check] order ${o.name} tagged as access point`);
 
   // Calculate alert for all orders, but access points/reships ignore danger level
-  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.dontShipBelow, settings.cautionBelow);
+  const alert = isLocal ? null : getAlert(maxTempF, minTempF, settings.cautionBelow);
 
   // Other unfulfilled orders from the same customer (only when requested — e.g. printing).
   let otherOrders: Array<{ id: string; name: string }> = [];
@@ -161,7 +161,7 @@ async function buildSlipFromOrder(
   };
 }
 
-export async function fetchSlip(orderId: string, settings: { dontShipBelow: number; cautionBelow: number }) {
+export async function fetchSlip(orderId: string, settings: { cautionBelow: number }) {
   const gid = `gid://shopify/Order/${orderId}`;
   const data = await shopifyGraphQL(
     `query getOrder($id: ID!) { order(id: $id) { ${SLIP_ORDER_FIELDS} } }`,
@@ -174,7 +174,7 @@ export async function fetchSlip(orderId: string, settings: { dontShipBelow: numb
 
 export async function fetchSlipBatch(
   orderIds: string[],
-  settings: { dontShipBelow: number; cautionBelow: number },
+  settings: { cautionBelow: number },
   overrideShipDate?: Date,
   includeOtherOrders = false,
 ): Promise<any[]> {
